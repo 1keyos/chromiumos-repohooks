@@ -1,3 +1,5 @@
+import random
+
 def main(project_list, **kwargs):
   print ('These projects will be uploaded: %s' %
          ', '.join(project_list))
@@ -7,5 +9,5 @@ def main(project_list, **kwargs):
   if random.random() <= .5:
     raise Exception('Pre-upload hook failed.  Have a nice day.')
 
-if __name__ == '__main__':                                                       
-  main()    
+if __name__ == '__main__':
+  main()

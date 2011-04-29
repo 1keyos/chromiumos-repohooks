@@ -12,21 +12,25 @@ def _get_hooks_dir():
   cmd = ['repo', 'forall', 'chromiumos/repohooks', '-c', 'pwd']
   return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0].strip()
 
-def _get_diff():
-  """Returns the diff for this project"""
-
-  # TODO(msb) iterate over each commit
-  cmd = ['git', 'show', 'HEAD']
+def _get_diff(commit):
+  """Returns the diff for this commit"""
+  cmd = ['git', 'show', commit]
   return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+
+def _get_commits():
+  """Returns a list of commits for this review"""
+  cmd = ['git', 'log', 'm/master...', '--format=%H']
+  commits = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+  return commits.split()
 
 # Hooks
 
-def _run_checkpatch(project):
+def _run_checkpatch(project, commit):
   """Runs checkpatch.pl on the given project"""
   hooks_dir = _get_hooks_dir()
   cmd = ['%s/checkpatch.pl' % hooks_dir, '-']
   p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-  output = p.communicate(_get_diff())[0]
+  output = p.communicate(_get_diff(commit))[0]
   if p.returncode:
     raise Exception('checkpatch.pl errors/warnings\n\n' + output)
 
@@ -47,8 +51,9 @@ def _run_project_hooks(project, hooks):
     pwd = os.getcwd()
     # hooks assume they are run from the root of the project
     os.chdir(proj_dir)
-    for hook in hooks[project]:
-        hook(project)
+    for commit in _get_commits():
+      for hook in hooks[project]:
+        hook(project, commit)
     os.chdir(pwd)
 
 # Main

@@ -39,7 +39,8 @@ def _run_checkpatch(project, commit):
 def _setup_project_hooks():
   """Returns a dictionay of callbacks: dict[project] = [callback1, callback2]"""
   return {
-    "chromiumos/third_party/kernel": [_run_checkpatch]
+    "chromiumos/third_party/kernel": [_run_checkpatch],
+    "chromiumos/third_party/kernel-next": [_run_checkpatch],
     }
 
 def _run_project_hooks(project, hooks):

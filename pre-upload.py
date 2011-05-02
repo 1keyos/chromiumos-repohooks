@@ -3,27 +3,268 @@
 # found in the LICENSE file.
 
 import os
+import re
 import subprocess
 
-# Helpers
+
+# General Helpers
+
+COMMON_INCLUDED_PATHS = [
+  # C++ and friends
+  r".*\.c$", r".*\.cc$", r".*\.cpp$", r".*\.h$", r".*\.m$", r".*\.mm$",
+  r".*\.inl$", r".*\.asm$", r".*\.hxx$", r".*\.hpp$", r".*\.s$", r".*\.S$",
+  # Scripts
+  r".*\.js$", r".*\.py$", r".*\.sh$", r".*\.rb$", r".*\.pl$", r".*\.pm$",
+  # No extension at all, note that ALL CAPS files are black listed in
+  # COMMON_EXCLUDED_LIST below.
+  r"(^|.*?[\\\/])[^.]+$",
+  # Other
+  r".*\.java$", r".*\.mk$", r".*\.am$",
+]
+
+COMMON_EXCLUDED_PATHS = [
+  # avoid doing source file checks for kernel
+  r"/src/third_party/kernel/",
+  r"/src/third_party/kernel-next/",
+  r".*\bexperimental[\\\/].*",
+  r".*\b[A-Z0-9_]{2,}$",
+  r".*[\\\/]debian[\\\/]rules$",
+]
 
 def _get_hooks_dir():
-  """Returns the absolute path to the repohooks directory"""
+  """Returns the absolute path to the repohooks directory."""
   cmd = ['repo', 'forall', 'chromiumos/repohooks', '-c', 'pwd']
   return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0].strip()
 
+def _match_regex_list(subject, expressions):
+  """Try to match a list of regular expressions to a string.
+
+  Args:
+    subject: The string to match regexes on
+    expressions: A list of regular expressions to check for matches with.
+
+  Returns:
+    Whether the passed in subject matches any of the passed in regexes.
+  """
+  for expr in expressions:
+    if (re.search(expr, subject)):
+      return True
+  return False
+
+def _filter_files(files, include_list, exclude_list=[]):
+  """Filter out files based on the conditions passed in.
+
+  Args:
+    files: list of filepaths to filter
+    include_list: list of regex that when matched with a file path will cause it
+        to be added to the output list unless the file is also matched with a
+        regex in the exclude_list.
+    exclude_list: list of regex that when matched with a file will prevent it
+        from being added to the output list, even if it is also matched with a
+        regex in the include_list.
+
+  Returns:
+    A list of filepaths that contain files matched in the include_list and not
+    in the exclude_list.
+  """
+  filtered = []
+  for f in files:
+    if (_match_regex_list(f, include_list) and
+        not _match_regex_list(f, exclude_list)):
+      filtered.append(f)
+  return filtered
+
+def _report_error(msg, items=None):
+  """Raises an exception with the passed in error message.
+
+  If extra error detail is passed in, it will be appended to the error message.
+
+  Args:
+    msg: Error message header.
+    items: A list of lines that follow the header that give extra error
+        information.
+  """
+  if items:
+    msg += '\n' + '\n'.join(items)
+  raise Exception(msg)
+
+
+# Git Helpers
+
 def _get_diff(commit):
-  """Returns the diff for this commit"""
+  """Returns the diff for this commit."""
   cmd = ['git', 'show', commit]
   return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
 
+def _get_file_diff(file, commit):
+  """Returns a list of (linenum, lines) tuples that the commit touched."""
+  cmd = ['git', 'show', '-p', '--no-ext-diff', commit, file]
+  output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+
+  new_lines = []
+  line_num = 0
+  for line in output.splitlines():
+    m = re.match(r'^@@ [0-9\,\+\-]+ \+([0-9]+)\,[0-9]+ @@', line)
+    if m:
+      line_num = int(m.groups(1)[0])
+      continue
+    if line.startswith('+') and not line.startswith('++'):
+      new_lines.append((line_num, line[1:]))
+    if not line.startswith('-'):
+      line_num += 1
+  return new_lines
+
+def _get_affected_files(commit):
+  """Returns list of absolute filepaths that were modified/added."""
+  cmd = ['git', 'diff', '--name-status', commit + '^!']
+  output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+  files = []
+  for statusline in output.splitlines():
+    m = re.match('^(\w)+\t(.+)$', statusline.rstrip())
+    # Ignore deleted files, and return absolute paths of files
+    if (m.group(1)[0] != 'D'):
+      pwd = os.getcwd()
+      files.append(os.path.join(pwd, m.group(2)))
+  return files
+
 def _get_commits():
-  """Returns a list of commits for this review"""
-  cmd = ['git', 'log', 'm/master...', '--format=%H']
+  """Returns a list of commits for this review."""
+  cmd = ['git', 'log', 'm/master..', '--format=%H']
   commits = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
   return commits.split()
 
-# Hooks
+def _get_commit_desc(commit):
+  """Returns the full commit message of a commit."""
+  cmd = ['git', 'log', '--format=%B', commit + '^!']
+  description = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+  return description.splitlines()
+
+
+# Common Hooks
+
+def _check_no_long_lines(project, commit):
+  """Checks that there aren't any lines longer than maxlen characters in any of
+  the text files to be submitted.
+  """
+  MAX_LEN = 80
+
+  errors = []
+  files = _filter_files(_get_affected_files(commit),
+                        COMMON_INCLUDED_PATHS,
+                        COMMON_EXCLUDED_PATHS)
+
+  for afile in files:
+    for line_num, line in _get_file_diff(afile, commit):
+      # Allow certain lines to exceed the maxlen rule.
+      if (len(line) > MAX_LEN and
+          not 'http://' in line and
+          not 'https://' in line and
+          not line.startswith('#define') and
+          not line.startswith('#include') and
+          not line.startswith('#import') and
+          not line.startswith('#pragma') and
+          not line.startswith('#if') and
+          not line.startswith('#endif')):
+        errors.append('%s, line %s, %s chars' % (afile, line_num, len(line)))
+        if len(errors) == 5:  # Just show the first 5 errors.
+          break
+
+  if errors:
+    msg = 'Found lines longer than %s characters (first 5 shown):' % MAX_LEN
+    _report_error(msg, errors)
+
+def _check_no_stray_whitespace(project, commit):
+  """Checks that there is no stray whitespace at source lines end."""
+  errors = []
+  files = _filter_files(_get_affected_files(commit),
+                                COMMON_INCLUDED_PATHS,
+                                COMMON_EXCLUDED_PATHS)
+
+  for afile in files:
+    for line_num, line in _get_file_diff(afile, commit):
+      if line.rstrip() != line:
+        errors.append('%s, line %s' % (afile, line_num))
+    if errors:
+      _report_error('Found line ending with white space in:', errors)
+
+def _check_no_tabs(project, commit):
+  """Checks there are no unexpanded tabs."""
+  TAB_OK_PATHS = [
+      r"/src/third_party/u-boot/",
+      r"/src/third_party/u-boot-next/",
+      r".*\.ebuild$",
+      r".*\.eclass$",
+      r".*/[M|m]akefile$"
+  ]
+
+  errors = []
+  files = _filter_files(_get_affected_files(commit),
+                        COMMON_INCLUDED_PATHS,
+                        COMMON_EXCLUDED_PATHS + TAB_OK_PATHS)
+
+  for afile in files:
+    for line_num, line in _get_file_diff(afile, commit):
+      if '\t' in line:
+          errors.append('%s, line %s' % (afile, line_num))
+  if errors:
+    _report_error('Found a tab character in:', errors)
+
+def _check_change_has_test_field(project, commit):
+  """Check for a non-empty 'TEST=' field in the commit message."""
+  TEST_RE = r'^\s*TEST\s*=\s*\S+.*$'
+
+  found_field = False
+  for line in _get_commit_desc(commit):
+
+    if re.match(TEST_RE, line):
+      found_field = True
+      break
+
+  if not found_field:
+     _report_error('Changelist description needs TEST field')
+
+def _check_change_has_bug_field(project, commit):
+  """Check for a non-empty 'BUG=' field in the commit message."""
+  BUG_RE = r'^\s*BUG\s*=\s*\S+.*$'
+
+  found_field = False
+  for line in _get_commit_desc(commit):
+    if re.match(BUG_RE, line):
+      found_field = True
+      break
+
+  if not found_field:
+     _report_error('Changelist description needs BUG field')
+
+def _check_license(project, commit):
+  """Verifies the license header."""
+  LICENSE_HEADER = (
+     r".*? Copyright \(c\) 20[-0-9]{2,7} The Chromium OS Authors\. All rights "
+       r"reserved\." "\n"
+     r".*? Use of this source code is governed by a BSD-style license that can "
+       "be\n"
+     r".*? found in the LICENSE file\."
+       "\n"
+  )
+
+  license_re = re.compile(LICENSE_HEADER, re.MULTILINE)
+  bad_files = []
+  files = _filter_files(_get_affected_files(commit),
+                        COMMON_INCLUDED_PATHS,
+                        COMMON_EXCLUDED_PATHS)
+
+  for f in files:
+    contents = open(f).read()
+    if len(contents) == 0: continue  # Ignore empty files
+    if not license_re.search(contents):
+      bad_files.append(f)
+  if bad_files:
+    _report_error('License must match:\n%s\n' % license_re.pattern +
+                  'Found a bad license header in these files:',
+                  bad_files)
+
+
+# Project-specific hooks
 
 def _run_checkpatch(project, commit):
   """Runs checkpatch.pl on the given project"""
@@ -32,9 +273,17 @@ def _run_checkpatch(project, commit):
   p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
   output = p.communicate(_get_diff(commit))[0]
   if p.returncode:
-    raise Exception('checkpatch.pl errors/warnings\n\n' + output)
+    _report_error('checkpatch.pl errors/warnings\n\n' + output)
+
 
 # Base
+
+COMMON_HOOKS = [_check_no_long_lines,
+                _check_no_stray_whitespace,
+                _check_no_tabs,
+                _check_change_has_test_field,
+                _check_change_has_bug_field,
+                _check_license]
 
 def _setup_project_hooks():
   """Returns a dictionay of callbacks: dict[project] = [callback1, callback2]"""
@@ -48,14 +297,18 @@ def _run_project_hooks(project, hooks):
   cmd = ['repo', 'forall', project, '-c', 'pwd']
   proj_dir = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
   proj_dir = proj_dir.strip()
+  pwd = os.getcwd()
+  # hooks assume they are run from the root of the project
+  os.chdir(proj_dir)
+
+  project_specific_hooks = []
   if project in hooks:
-    pwd = os.getcwd()
-    # hooks assume they are run from the root of the project
-    os.chdir(proj_dir)
-    for commit in _get_commits():
-      for hook in hooks[project]:
-        hook(project, commit)
-    os.chdir(pwd)
+    project_specific_hooks = hooks[project]
+
+  for commit in _get_commits():
+    for hook in COMMON_HOOKS + project_specific_hooks:
+      hook(project, commit)
+  os.chdir(pwd)
 
 # Main
 

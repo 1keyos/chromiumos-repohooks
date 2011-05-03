@@ -4,6 +4,7 @@
 
 import os
 import re
+import sys
 import subprocess
 
 
@@ -306,8 +307,14 @@ def _run_project_hooks(project, hooks):
     project_specific_hooks = hooks[project]
 
   for commit in _get_commits():
-    for hook in COMMON_HOOKS + project_specific_hooks:
-      hook(project, commit)
+    try:
+      for hook in COMMON_HOOKS + project_specific_hooks:
+        hook(project, commit)
+    except:
+      msg = 'ERROR: pre-upload failed: commit=%s, project=%s' % (commit[:8],
+                                                                 project)
+      print >> sys.stderr, msg
+      raise
   os.chdir(pwd)
 
 # Main

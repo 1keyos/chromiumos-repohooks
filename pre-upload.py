@@ -137,8 +137,7 @@ def _get_commits():
 def _get_commit_desc(commit):
   """Returns the full commit message of a commit."""
   cmd = ['git', 'log', '--format=%B', commit + '^!']
-  description = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
-  return description.splitlines()
+  return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
 
 
 # Common Hooks
@@ -212,30 +211,17 @@ def _check_no_tabs(project, commit):
 
 def _check_change_has_test_field(project, commit):
   """Check for a non-empty 'TEST=' field in the commit message."""
-  TEST_RE = r'^\s*TEST\s*=\s*\S+.*$'
+  TEST_RE = r'\n\s*TEST\s*=[^\n]*\S+'
 
-  found_field = False
-  for line in _get_commit_desc(commit):
-
-    if re.match(TEST_RE, line):
-      found_field = True
-      break
-
-  if not found_field:
-     _report_error('Changelist description needs TEST field')
+  if not re.search(TEST_RE, _get_commit_desc(commit)):
+     _report_error('Changelist description needs TEST field (after first line)')
 
 def _check_change_has_bug_field(project, commit):
   """Check for a non-empty 'BUG=' field in the commit message."""
-  BUG_RE = r'^\s*BUG\s*=\s*\S+.*$'
+  BUG_RE = r'\n\s*BUG\s*=[^\n]*\S+'
 
-  found_field = False
-  for line in _get_commit_desc(commit):
-    if re.match(BUG_RE, line):
-      found_field = True
-      break
-
-  if not found_field:
-     _report_error('Changelist description needs BUG field')
+  if not re.search(BUG_RE, _get_commit_desc(commit)):
+     _report_error('Changelist description needs BUG field (after first line)')
 
 def _check_license(project, commit):
   """Verifies the license header."""

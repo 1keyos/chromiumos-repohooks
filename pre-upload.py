@@ -25,9 +25,8 @@ COMMON_INCLUDED_PATHS = [
 ]
 
 COMMON_EXCLUDED_PATHS = [
-  # avoid doing source file checks for kernel
-  r"/src/third_party/kernel/",
-  r"/src/third_party/kernel-next/",
+  # don't do source file checks for all third_party projects for now
+  r"/src/third_party/",
   r".*\bexperimental[\\\/].*",
   r".*\b[A-Z0-9_]{2,}$",
   r".*[\\\/]debian[\\\/]rules$",
@@ -191,8 +190,6 @@ def _check_no_stray_whitespace(project, commit):
 def _check_no_tabs(project, commit):
   """Checks there are no unexpanded tabs."""
   TAB_OK_PATHS = [
-      r"/src/third_party/u-boot/",
-      r"/src/third_party/u-boot-next/",
       r".*\.ebuild$",
       r".*\.eclass$",
       r".*/[M|m]akefile$"
@@ -282,12 +279,12 @@ def _run_json_check(project, commit):
 
 # Base
 
-COMMON_HOOKS = [_check_no_long_lines,
+COMMON_HOOKS = [_check_change_has_bug_field,
+                _check_change_has_test_field,
+                _check_change_has_proper_changeid,
+                _check_no_long_lines,
                 _check_no_stray_whitespace,
                 _check_no_tabs,
-                _check_change_has_test_field,
-                _check_change_has_bug_field,
-                _check_change_has_proper_changeid,
                 _check_license]
 
 def _setup_project_hooks():

@@ -266,7 +266,7 @@ def _run_checkpatch(project, commit):
 
 def _run_json_check(project, commit):
   """Checks that all JSON files are syntactically valid."""
-  for f in _filter_files(_get_affected_files(commit), r'.*\.json'):
+  for f in _filter_files(_get_affected_files(commit), [r'.*\.json']):
     try:
       json.load(open(f))
     except Exception, e:

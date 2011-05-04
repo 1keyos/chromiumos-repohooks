@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import json
 import os
 import re
 import sys
@@ -263,6 +264,15 @@ def _run_checkpatch(project, commit):
     _report_error('checkpatch.pl errors/warnings\n\n' + output)
 
 
+def _run_json_check(project, commit):
+  """Checks that all JSON files are syntactically valid."""
+  for f in _filter_files(_get_affected_files(commit), r'.*\.json'):
+    try:
+      json.load(open(f))
+    except Exception, e:
+      _report_error('Invalid JSON in %s: %s' % (f, e))
+
+
 # Base
 
 COMMON_HOOKS = [_check_no_long_lines,
@@ -277,6 +287,7 @@ def _setup_project_hooks():
   return {
     "chromiumos/third_party/kernel": [_run_checkpatch],
     "chromiumos/third_party/kernel-next": [_run_checkpatch],
+    "chromeos/autotest-tools": [_run_json_check],
     }
 
 def _run_project_hooks(project, hooks):

@@ -224,6 +224,13 @@ def _check_change_has_bug_field(project, commit):
   if not re.search(BUG_RE, _get_commit_desc(commit)):
      _report_error('Changelist description needs BUG field (after first line)')
 
+def _check_change_has_proper_changeid(project, commit):
+  """Verify that Change-ID is present in last paragraph of commit message."""
+  desc = _get_commit_desc(commit)
+  loc = desc.rfind('\nChange-Id:')
+  if loc == -1 or re.search('\n\s*\n\s*\S+', desc[loc:]):
+     _report_error('Change-Id must be in last paragraph of description.')
+
 def _check_license(project, commit):
   """Verifies the license header."""
   LICENSE_HEADER = (
@@ -280,6 +287,7 @@ COMMON_HOOKS = [_check_no_long_lines,
                 _check_no_tabs,
                 _check_change_has_test_field,
                 _check_change_has_bug_field,
+                _check_change_has_proper_changeid,
                 _check_license]
 
 def _setup_project_hooks():

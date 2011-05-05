@@ -35,10 +35,14 @@ COMMON_EXCLUDED_PATHS = [
 
 MIN_GIT_VERSION = [1, 7, 2]
 
+def _run_command(cmd):
+  """Executes the passed in command and returns raw stdout output."""
+  return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+
 def _get_hooks_dir():
   """Returns the absolute path to the repohooks directory."""
   cmd = ['repo', 'forall', 'chromiumos/repohooks', '-c', 'pwd']
-  return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0].strip()
+  return _run_command(cmd).strip()
 
 def _match_regex_list(subject, expressions):
   """Try to match a list of regular expressions to a string.
@@ -94,6 +98,7 @@ def _report_error(msg, items=None):
 
 
 # Git Helpers
+
 def _check_git_version():
   """Checks the git version installed, dies if it is insufficient"""
   cmd = ['git', '--version']
@@ -114,13 +119,11 @@ def _check_git_version():
 
 def _get_diff(commit):
   """Returns the diff for this commit."""
-  cmd = ['git', 'show', commit]
-  return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+  return _run_command(['git', 'show', commit])
 
 def _get_file_diff(file, commit):
   """Returns a list of (linenum, lines) tuples that the commit touched."""
-  cmd = ['git', 'show', '-p', '--no-ext-diff', commit, file]
-  output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+  output = _run_command(['git', 'show', '-p', '--no-ext-diff', commit, file])
 
   new_lines = []
   line_num = 0
@@ -137,8 +140,7 @@ def _get_file_diff(file, commit):
 
 def _get_affected_files(commit):
   """Returns list of absolute filepaths that were modified/added."""
-  cmd = ['git', 'diff', '--name-status', commit + '^!']
-  output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+  output = _run_command(['git', 'diff', '--name-status', commit + '^!'])
   files = []
   for statusline in output.splitlines():
     m = re.match('^(\w)+\t(.+)$', statusline.rstrip())
@@ -151,13 +153,11 @@ def _get_affected_files(commit):
 def _get_commits():
   """Returns a list of commits for this review."""
   cmd = ['git', 'log', 'm/master..', '--format=%H']
-  commits = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
-  return commits.split()
+  return _run_command(cmd).split()
 
 def _get_commit_desc(commit):
   """Returns the full commit message of a commit."""
-  cmd = ['git', 'log', '--format=%B', commit + '^!']
-  return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+  return _run_command(['git', 'log', '--format=%B', commit + '^!'])
 
 
 # Common Hooks
@@ -319,9 +319,7 @@ def _setup_project_hooks():
 
 def _run_project_hooks(project, hooks):
   """For each project run its project specific hook from the hooks dictionary"""
-  cmd = ['repo', 'forall', project, '-c', 'pwd']
-  proj_dir = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
-  proj_dir = proj_dir.strip()
+  proj_dir = _run_command(['repo', 'forall', project, '-c', 'pwd']).strip()
   pwd = os.getcwd()
   # hooks assume they are run from the root of the project
   os.chdir(proj_dir)
@@ -340,6 +338,7 @@ def _run_project_hooks(project, hooks):
       print >> sys.stderr, msg
       raise
   os.chdir(pwd)
+
 
 # Main
 

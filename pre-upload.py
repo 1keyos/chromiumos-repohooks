@@ -33,6 +33,8 @@ COMMON_EXCLUDED_PATHS = [
   r".*[\\\/]debian[\\\/]rules$",
 ]
 
+MIN_GIT_VERSION = [1, 7, 2, 0]
+
 def _get_hooks_dir():
   """Returns the absolute path to the repohooks directory."""
   cmd = ['repo', 'forall', 'chromiumos/repohooks', '-c', 'pwd']
@@ -92,6 +94,24 @@ def _report_error(msg, items=None):
 
 
 # Git Helpers
+def _check_git_version():
+  """Checks the git version installed, dies if it is insufficient"""
+  cmd = ['git', '--version']
+  output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+
+  m = re.match('(git version )(.*)\n', output)
+  if not m or not m.group(2):
+    _report_error('Failed to get git version, git output=' + output)
+
+  version = m.group(2).split('.')
+  version = map(lambda x: int(x), version)
+  for v, mv in zip(version, MIN_GIT_VERSION):
+    if v < mv:
+      _report_error('Invalid version of git (' + m.group(2) + '), you need '
+                    + 'at least version '
+                    + ''.join([`num` + '.' for num in MIN_GIT_VERSION]))
+    elif v > mv:
+      break
 
 def _get_diff(commit):
   """Returns the diff for this commit."""
@@ -325,6 +345,7 @@ def _run_project_hooks(project, hooks):
 # Main
 
 def main(project_list, **kwargs):
+  _check_git_version()
   hooks = _setup_project_hooks()
   for project in project_list:
     _run_project_hooks(project, hooks)

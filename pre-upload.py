@@ -8,6 +8,8 @@ import re
 import sys
 import subprocess
 
+class VerifyException(Exception):
+  pass
 
 # General Helpers
 
@@ -94,7 +96,7 @@ def _report_error(msg, items=None):
   """
   if items:
     msg += '\n' + '\n'.join(items)
-  raise Exception(msg)
+  raise VerifyException(msg)
 
 
 # Git Helpers
@@ -330,19 +332,27 @@ def _run_project_hooks(project, hooks):
 
   try:
     commit_list = _get_commits()
-  except:
+  except VerifyException as e:
     print >> sys.stderr, "ERROR: project *%s*" % project
+    print >> sys.stderr, e
     raise
 
   for commit in commit_list:
     try:
       for hook in COMMON_HOOKS + project_specific_hooks:
         hook(project, commit)
-    except:
+    except VerifyException as e:
       msg = 'ERROR: pre-upload failed: commit=%s, project=%s' % (commit[:8],
                                                                  project)
+
       print >> sys.stderr, msg
+      print >> sys.stderr
+      print >> sys.stderr, _get_commit_desc(commit)
+      print >> sys.stderr
+      print >> sys.stderr, e
+
       raise
+
   os.chdir(pwd)
 
 
@@ -350,8 +360,12 @@ def _run_project_hooks(project, hooks):
 
 def main(project_list, **kwargs):
   hooks = _setup_project_hooks()
-  for project in project_list:
-    _run_project_hooks(project, hooks)
+
+  try:
+    for project in project_list:
+      _run_project_hooks(project, hooks)
+  except VerifyException as e:
+    sys.exit(1)
 
 if __name__ == '__main__':
   main()

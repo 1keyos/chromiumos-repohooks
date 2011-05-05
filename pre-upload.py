@@ -33,7 +33,7 @@ COMMON_EXCLUDED_PATHS = [
   r".*[\\\/]debian[\\\/]rules$",
 ]
 
-MIN_GIT_VERSION = [1, 7, 2, 0]
+MIN_GIT_VERSION = [1, 7, 2]
 
 def _get_hooks_dir():
   """Returns the absolute path to the repohooks directory."""
@@ -98,8 +98,7 @@ def _check_git_version():
   """Checks the git version installed, dies if it is insufficient"""
   cmd = ['git', '--version']
   output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
-
-  m = re.match('(git version )(.*)\n', output)
+  m = re.match('(git version )([0-9]+\.[0-9]+\.[0-9]+).*\n', output)
   if not m or not m.group(2):
     _report_error('Failed to get git version, git output=' + output)
 

@@ -117,6 +117,25 @@ def _check_git_version():
     elif v > mv:
       break
 
+def _get_upstream_branch():
+  """Returns the upstream tracking branch of the current branch.
+
+  Raises:
+    Error if there is no tracking branch
+  """
+  current_branch = _run_command(['git', 'symbolic-ref', 'HEAD']).strip()
+  current_branch = current_branch.replace('refs/heads/', '')
+  if not current_branch:
+    _report_error('Need to be on a tracking branch')
+
+  cfg_option = 'branch.' + current_branch + '.%s'
+  full_upstream = _run_command(['git', 'config', cfg_option % 'merge']).strip()
+  remote = _run_command(['git', 'config', cfg_option % 'remote']).strip()
+  if not remote or not full_upstream:
+    _report_error('Need to be on a tracking branch')
+
+  return full_upstream.replace('heads', 'remotes/' + remote)
+
 def _get_diff(commit):
   """Returns the diff for this commit."""
   return _run_command(['git', 'show', commit])
@@ -152,7 +171,7 @@ def _get_affected_files(commit):
 
 def _get_commits():
   """Returns a list of commits for this review."""
-  cmd = ['git', 'log', 'm/master..', '--format=%H']
+  cmd = ['git', 'log', '%s..' % _get_upstream_branch(), '--format=%H']
   return _run_command(cmd).split()
 
 def _get_commit_desc(commit):

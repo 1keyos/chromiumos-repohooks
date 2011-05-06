@@ -98,25 +98,6 @@ def _report_error(msg, items=None):
 
 
 # Git Helpers
-
-def _check_git_version():
-  """Checks the git version installed, dies if it is insufficient"""
-  cmd = ['git', '--version']
-  output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
-  m = re.match('(git version )([0-9]+\.[0-9]+\.[0-9]+).*\n', output)
-  if not m or not m.group(2):
-    _report_error('Failed to get git version, git output=' + output)
-
-  version = m.group(2).split('.')
-  version = map(lambda x: int(x), version)
-  for v, mv in zip(version, MIN_GIT_VERSION):
-    if v < mv:
-      _report_error('Invalid version of git (' + m.group(2) + '), you need '
-                    + 'at least version '
-                    + ''.join([`num` + '.' for num in MIN_GIT_VERSION]))
-    elif v > mv:
-      break
-
 def _get_upstream_branch():
   """Returns the upstream tracking branch of the current branch.
 
@@ -176,7 +157,7 @@ def _get_commits():
 
 def _get_commit_desc(commit):
   """Returns the full commit message of a commit."""
-  return _run_command(['git', 'log', '--format=%B', commit + '^!'])
+  return _run_command(['git', 'log', '--format=%s%n%n%b', commit + '^!'])
 
 
 # Common Hooks
@@ -362,7 +343,6 @@ def _run_project_hooks(project, hooks):
 # Main
 
 def main(project_list, **kwargs):
-  _check_git_version()
   hooks = _setup_project_hooks()
   for project in project_list:
     _run_project_hooks(project, hooks)

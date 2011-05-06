@@ -328,7 +328,13 @@ def _run_project_hooks(project, hooks):
   if project in hooks:
     project_specific_hooks = hooks[project]
 
-  for commit in _get_commits():
+  try:
+    commit_list = _get_commits()
+  except:
+    print >> sys.stderr, "ERROR: project *%s*" % project
+    raise
+
+  for commit in commit_list:
     try:
       for hook in COMMON_HOOKS + project_specific_hooks:
         hook(project, commit)

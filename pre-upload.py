@@ -212,6 +212,7 @@ def _check_no_stray_whitespace(project, commit):
 def _check_no_tabs(project, commit):
   """Checks there are no unexpanded tabs."""
   TAB_OK_PATHS = [
+      r"/src/platform/u-boot-config/",
       r"/src/third_party/u-boot/",
       r"/src/third_party/u-boot-next/",
       r".*\.ebuild$",

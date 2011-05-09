@@ -8,10 +8,9 @@ import re
 import sys
 import subprocess
 
-class VerifyException(Exception):
-  pass
+from errors import (VerifyException, HookFailure, PrintErrorForProject,
+                    PrintErrorsForCommit)
 
-# General Helpers
 
 COMMON_INCLUDED_PATHS = [
   # C++ and friends
@@ -26,6 +25,7 @@ COMMON_INCLUDED_PATHS = [
   r".*\.java$", r".*\.mk$", r".*\.am$",
 ]
 
+
 COMMON_EXCLUDED_PATHS = [
   # avoid doing source file checks for kernel
   r"/src/third_party/kernel/",
@@ -37,16 +37,20 @@ COMMON_EXCLUDED_PATHS = [
   r".*[\\\/]debian[\\\/]rules$",
 ]
 
-MIN_GIT_VERSION = [1, 7, 2]
+
+# General Helpers
+
 
 def _run_command(cmd):
   """Executes the passed in command and returns raw stdout output."""
   return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
 
+
 def _get_hooks_dir():
   """Returns the absolute path to the repohooks directory."""
   cmd = ['repo', 'forall', 'chromiumos/repohooks', '-c', 'pwd']
   return _run_command(cmd).strip()
+
 
 def _match_regex_list(subject, expressions):
   """Try to match a list of regular expressions to a string.
@@ -62,6 +66,7 @@ def _match_regex_list(subject, expressions):
     if (re.search(expr, subject)):
       return True
   return False
+
 
 def _filter_files(files, include_list, exclude_list=[]):
   """Filter out files based on the conditions passed in.
@@ -86,22 +91,10 @@ def _filter_files(files, include_list, exclude_list=[]):
       filtered.append(f)
   return filtered
 
-def _report_error(msg, items=None):
-  """Raises an exception with the passed in error message.
-
-  If extra error detail is passed in, it will be appended to the error message.
-
-  Args:
-    msg: Error message header.
-    items: A list of lines that follow the header that give extra error
-        information.
-  """
-  if items:
-    msg += '\n' + '\n'.join(items)
-  raise VerifyException(msg)
-
 
 # Git Helpers
+
+
 def _get_upstream_branch():
   """Returns the upstream tracking branch of the current branch.
 
@@ -111,19 +104,21 @@ def _get_upstream_branch():
   current_branch = _run_command(['git', 'symbolic-ref', 'HEAD']).strip()
   current_branch = current_branch.replace('refs/heads/', '')
   if not current_branch:
-    _report_error('Need to be on a tracking branch')
+    raise VerifyException('Need to be on a tracking branch')
 
   cfg_option = 'branch.' + current_branch + '.%s'
   full_upstream = _run_command(['git', 'config', cfg_option % 'merge']).strip()
   remote = _run_command(['git', 'config', cfg_option % 'remote']).strip()
   if not remote or not full_upstream:
-    _report_error('Need to be on a tracking branch')
+    raise VerifyException('Need to be on a tracking branch')
 
   return full_upstream.replace('heads', 'remotes/' + remote)
+
 
 def _get_diff(commit):
   """Returns the diff for this commit."""
   return _run_command(['git', 'show', commit])
+
 
 def _get_file_diff(file, commit):
   """Returns a list of (linenum, lines) tuples that the commit touched."""
@@ -142,6 +137,7 @@ def _get_file_diff(file, commit):
       line_num += 1
   return new_lines
 
+
 def _get_affected_files(commit):
   """Returns list of absolute filepaths that were modified/added."""
   output = _run_command(['git', 'diff', '--name-status', commit + '^!'])
@@ -154,10 +150,12 @@ def _get_affected_files(commit):
       files.append(os.path.join(pwd, m.group(2)))
   return files
 
+
 def _get_commits():
   """Returns a list of commits for this review."""
   cmd = ['git', 'log', '%s..' % _get_upstream_branch(), '--format=%H']
   return _run_command(cmd).split()
+
 
 def _get_commit_desc(commit):
   """Returns the full commit message of a commit."""
@@ -165,6 +163,7 @@ def _get_commit_desc(commit):
 
 
 # Common Hooks
+
 
 def _check_no_long_lines(project, commit):
   """Checks that there aren't any lines longer than maxlen characters in any of
@@ -195,7 +194,8 @@ def _check_no_long_lines(project, commit):
 
   if errors:
     msg = 'Found lines longer than %s characters (first 5 shown):' % MAX_LEN
-    _report_error(msg, errors)
+    return HookFailure(msg, errors)
+
 
 def _check_no_stray_whitespace(project, commit):
   """Checks that there is no stray whitespace at source lines end."""
@@ -209,7 +209,8 @@ def _check_no_stray_whitespace(project, commit):
       if line.rstrip() != line:
         errors.append('%s, line %s' % (afile, line_num))
     if errors:
-      _report_error('Found line ending with white space in:', errors)
+      return HookFailure('Found line ending with white space in:', errors)
+
 
 def _check_no_tabs(project, commit):
   """Checks there are no unexpanded tabs."""
@@ -232,28 +233,34 @@ def _check_no_tabs(project, commit):
       if '\t' in line:
           errors.append('%s, line %s' % (afile, line_num))
   if errors:
-    _report_error('Found a tab character in:', errors)
+    return HookFailure('Found a tab character in:', errors)
+
 
 def _check_change_has_test_field(project, commit):
   """Check for a non-empty 'TEST=' field in the commit message."""
   TEST_RE = r'\n\s*TEST\s*=[^\n]*\S+'
 
   if not re.search(TEST_RE, _get_commit_desc(commit)):
-     _report_error('Changelist description needs TEST field (after first line)')
+    msg = 'Changelist description needs TEST field (after first line)'
+    return HookFailure(msg)
+
 
 def _check_change_has_bug_field(project, commit):
   """Check for a non-empty 'BUG=' field in the commit message."""
   BUG_RE = r'\n\s*BUG\s*=[^\n]*\S+'
 
   if not re.search(BUG_RE, _get_commit_desc(commit)):
-     _report_error('Changelist description needs BUG field (after first line)')
+    msg = 'Changelist description needs BUG field (after first line)'
+    return HookFailure(msg)
+
 
 def _check_change_has_proper_changeid(project, commit):
   """Verify that Change-ID is present in last paragraph of commit message."""
   desc = _get_commit_desc(commit)
   loc = desc.rfind('\nChange-Id:')
   if loc == -1 or re.search('\n\s*\n\s*\S+', desc[loc:]):
-     _report_error('Change-Id must be in last paragraph of description.')
+    return HookFailure('Change-Id must be in last paragraph of description.')
+
 
 def _check_license(project, commit):
   """Verifies the license header."""
@@ -278,12 +285,13 @@ def _check_license(project, commit):
     if not license_re.search(contents):
       bad_files.append(f)
   if bad_files:
-    _report_error('License must match:\n%s\n' % license_re.pattern +
-                  'Found a bad license header in these files:',
-                  bad_files)
+    return HookFailure('License must match:\n%s\n' % license_re.pattern +
+                          'Found a bad license header in these files:',
+                          bad_files)
 
 
 # Project-specific hooks
+
 
 def _run_checkpatch(project, commit):
   """Runs checkpatch.pl on the given project"""
@@ -292,7 +300,7 @@ def _run_checkpatch(project, commit):
   p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
   output = p.communicate(_get_diff(commit))[0]
   if p.returncode:
-    _report_error('checkpatch.pl errors/warnings\n\n' + output)
+    return HookFailure('checkpatch.pl errors/warnings\n\n' + output)
 
 
 def _run_json_check(project, commit):
@@ -301,10 +309,11 @@ def _run_json_check(project, commit):
     try:
       json.load(open(f))
     except Exception, e:
-      _report_error('Invalid JSON in %s: %s' % (f, e))
+      return HookFailure('Invalid JSON in %s: %s' % (f, e))
 
 
 # Base
+
 
 COMMON_HOOKS = [_check_change_has_bug_field,
                 _check_change_has_test_field,
@@ -314,6 +323,7 @@ COMMON_HOOKS = [_check_change_has_bug_field,
                 _check_license,
                 _check_no_tabs]
 
+
 def _setup_project_hooks():
   """Returns a dictionay of callbacks: dict[project] = [callback1, callback2]"""
   return {
@@ -322,8 +332,17 @@ def _setup_project_hooks():
     "chromeos/autotest-tools": [_run_json_check],
     }
 
+
 def _run_project_hooks(project, hooks):
-  """For each project run its project specific hook from the hooks dictionary"""
+  """For each project run its project specific hook from the hooks dictionary.
+
+  Args:
+    project: name of project to run hooks for.
+    hooks: a dictionary of hooks indexed by project name
+
+  Returns:
+    Boolean value of whether any errors were ecountered while running the hooks.
+  """
   proj_dir = _run_command(['repo', 'forall', project, '-c', 'pwd']).strip()
   pwd = os.getcwd()
   # hooks assume they are run from the root of the project
@@ -336,39 +355,45 @@ def _run_project_hooks(project, hooks):
   try:
     commit_list = _get_commits()
   except VerifyException as e:
-    print >> sys.stderr, "ERROR: project *%s*" % project
-    print >> sys.stderr, e
-    raise
+    PrintErrorForProject(project, HookFailure(str(e)))
+    os.chdir(pwd)
+    return True
 
+  error_found = False
   for commit in commit_list:
-    try:
-      for hook in COMMON_HOOKS + project_specific_hooks:
-        hook(project, commit)
-    except VerifyException as e:
-      msg = 'ERROR: pre-upload failed: commit=%s, project=%s' % (commit[:8],
-                                                                 project)
-
-      print >> sys.stderr, msg
-      print >> sys.stderr
-      print >> sys.stderr, _get_commit_desc(commit)
-      print >> sys.stderr
-      print >> sys.stderr, e
-
-      raise
+    error_list = []
+    for hook in COMMON_HOOKS + project_specific_hooks:
+      hook_error = hook(project, commit)
+      if hook_error:
+        error_list.append(hook_error)
+        error_found = True
+    if error_list:
+      PrintErrorsForCommit(project, commit, _get_commit_desc(commit),
+                           error_list)
 
   os.chdir(pwd)
+  return error_found
 
 
 # Main
 
+
 def main(project_list, **kwargs):
   hooks = _setup_project_hooks()
 
-  try:
-    for project in project_list:
-      _run_project_hooks(project, hooks)
-  except VerifyException as e:
+  found_error = False
+  for project in project_list:
+    if _run_project_hooks(project, hooks):
+      found_error = True
+
+  if (found_error):
+    msg = ('Preupload failed due to errors in project(s). HINTS:\n'
+           '- To upload only current project, run \'repo upload .\'\n'
+           '- Errors may also be due to old upload hooks.  Please run '
+           '\'repo sync chromiumos/repohooks\' to update.')
+    print >> sys.stderr, msg
     sys.exit(1)
+
 
 if __name__ == '__main__':
   main()

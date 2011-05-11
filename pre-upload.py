@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import ConfigParser
 import json
 import os
 import re
@@ -36,6 +37,9 @@ COMMON_EXCLUDED_PATHS = [
   r".*\b[A-Z0-9_]{2,}$",
   r".*[\\\/]debian[\\\/]rules$",
 ]
+
+
+_CONFIG_FILE = 'PRESUBMIT.cfg'
 
 
 # General Helpers
@@ -315,30 +319,81 @@ def _run_json_check(project, commit):
 # Base
 
 
-COMMON_HOOKS = [_check_change_has_bug_field,
-                _check_change_has_test_field,
-                _check_change_has_proper_changeid,
-                _check_no_stray_whitespace,
-                _check_no_long_lines,
-                _check_license,
-                _check_no_tabs]
+# A list of hooks that are not project-specific
+_COMMON_HOOKS = [
+    _check_change_has_bug_field,
+    _check_change_has_test_field,
+    _check_change_has_proper_changeid,
+    _check_no_stray_whitespace,
+    _check_no_long_lines,
+    _check_license,
+    _check_no_tabs,
+]
 
 
-def _setup_project_hooks():
-  """Returns a dictionay of callbacks: dict[project] = [callback1, callback2]"""
-  return {
+# A dictionary of project-specific hooks(callbacks), indexed by project name.
+# dict[project] = [callback1, callback2]
+_PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/third_party/kernel": [_run_checkpatch],
     "chromiumos/third_party/kernel-next": [_run_checkpatch],
     "chromeos/autotest-tools": [_run_json_check],
-    }
+}
 
 
-def _run_project_hooks(project, hooks):
+# A dictionary of flags (keys) that can appear in the config file, and the hook
+# that the flag disables (value)
+_DISABLE_FLAGS = {
+    'stray_whitespace_check': _check_no_stray_whitespace,
+    'long_line_check': _check_no_long_lines,
+    'cros_license_check': _check_license,
+    'tab_check': _check_no_tabs,
+}
+
+
+def _get_disabled_hooks():
+  """Returns a set of hooks disabled by the current project's config file.
+
+  Expects to be called within the project root.
+  """
+  SECTION = 'Hook Overrides'
+  config = ConfigParser.RawConfigParser()
+  try:
+    config.read(_CONFIG_FILE)
+    flags = config.options(SECTION)
+  except ConfigParser.Error:
+    return set([])
+
+  disable_flags = []
+  for flag in flags:
+    try:
+      if not config.getboolean(SECTION, flag): disable_flags.append(flag)
+    except ValueError as e:
+      msg = "Error parsing flag \'%s\' in %s file - " % (flag, _CONFIG_FILE)
+      print msg + str(e)
+
+  disabled_keys = set(_DISABLE_FLAGS.iterkeys()).intersection(disable_flags)
+  return set([_DISABLE_FLAGS[key] for key in disabled_keys])
+
+
+def _get_project_hooks(project):
+  """Returns a list of hooks that need to be run for a project.
+
+  Expects to be called from within the project root.
+  """
+  disabled_hooks = _get_disabled_hooks()
+  hooks = [hook for hook in _COMMON_HOOKS if hook not in disabled_hooks]
+
+  if project in _PROJECT_SPECIFIC_HOOKS:
+    hooks.extend(_PROJECT_SPECIFIC_HOOKS[project])
+
+  return hooks
+
+
+def _run_project_hooks(project):
   """For each project run its project specific hook from the hooks dictionary.
 
   Args:
     project: name of project to run hooks for.
-    hooks: a dictionary of hooks indexed by project name
 
   Returns:
     Boolean value of whether any errors were ecountered while running the hooks.
@@ -348,10 +403,6 @@ def _run_project_hooks(project, hooks):
   # hooks assume they are run from the root of the project
   os.chdir(proj_dir)
 
-  project_specific_hooks = []
-  if project in hooks:
-    project_specific_hooks = hooks[project]
-
   try:
     commit_list = _get_commits()
   except VerifyException as e:
@@ -359,10 +410,11 @@ def _run_project_hooks(project, hooks):
     os.chdir(pwd)
     return True
 
+  hooks = _get_project_hooks(project)
   error_found = False
   for commit in commit_list:
     error_list = []
-    for hook in COMMON_HOOKS + project_specific_hooks:
+    for hook in hooks:
       hook_error = hook(project, commit)
       if hook_error:
         error_list.append(hook_error)
@@ -379,18 +431,16 @@ def _run_project_hooks(project, hooks):
 
 
 def main(project_list, **kwargs):
-  hooks = _setup_project_hooks()
-
   found_error = False
   for project in project_list:
-    if _run_project_hooks(project, hooks):
+    if _run_project_hooks(project):
       found_error = True
 
   if (found_error):
     msg = ('Preupload failed due to errors in project(s). HINTS:\n'
-           '- To upload only current project, run \'repo upload .\'\n'
-           '- Errors may also be due to old upload hooks.  Please run '
-           '\'repo sync chromiumos/repohooks\' to update.')
+           '- To disable some source style checks, and for other hints, see '
+           '<checkout_dir>/src/repohooks/README\n'
+           '- To upload only current project, run \'repo upload .\'')
     print >> sys.stderr, msg
     sys.exit(1)
 

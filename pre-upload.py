@@ -242,7 +242,7 @@ def _check_no_tabs(project, commit):
 
 def _check_change_has_test_field(project, commit):
   """Check for a non-empty 'TEST=' field in the commit message."""
-  TEST_RE = r'\n\s*TEST\s*=[^\n]*\S+'
+  TEST_RE = r'\nTEST=\S+'
 
   if not re.search(TEST_RE, _get_commit_desc(commit)):
     msg = 'Changelist description needs TEST field (after first line)'
@@ -250,11 +250,14 @@ def _check_change_has_test_field(project, commit):
 
 
 def _check_change_has_bug_field(project, commit):
-  """Check for a non-empty 'BUG=' field in the commit message."""
-  BUG_RE = r'\n\s*BUG\s*=[^\n]*\S+'
+  """Check for a correctly formatted 'BUG=' field in the commit message."""
+  BUG_RE = r'\nBUG=([Nn]one|(chrome-os-partner|chromium-os):\d+)'
 
   if not re.search(BUG_RE, _get_commit_desc(commit)):
-    msg = 'Changelist description needs BUG field (after first line)'
+    msg = ('Changelist description needs BUG field (after first line):\n'
+           'BUG=chromium-os:99999 (for public tracker)\n'
+           'BUG=chrome-os-partner:9999 (for partner tracker)\n'
+           'BUG=None')
     return HookFailure(msg)
 
 

@@ -219,9 +219,7 @@ def _check_no_stray_whitespace(project, commit):
 def _check_no_tabs(project, commit):
   """Checks there are no unexpanded tabs."""
   TAB_OK_PATHS = [
-      r"/src/platform/u-boot-config/",
       r"/src/third_party/u-boot/",
-      r"/src/third_party/u-boot-next/",
       r".*\.ebuild$",
       r".*\.eclass$",
       r".*/[M|m]akefile$"
@@ -300,14 +298,18 @@ def _check_license(project, commit):
 # Project-specific hooks
 
 
-def _run_checkpatch(project, commit):
+def _run_checkpatch(project, commit, options=[]):
   """Runs checkpatch.pl on the given project"""
   hooks_dir = _get_hooks_dir()
-  cmd = ['%s/checkpatch.pl' % hooks_dir, '-']
+  cmd = ['%s/checkpatch.pl' % hooks_dir] + options + ['-']
   p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
   output = p.communicate(_get_diff(commit))[0]
   if p.returncode:
     return HookFailure('checkpatch.pl errors/warnings\n\n' + output)
+
+
+def _run_checkpatch_no_tree(project, commit):
+  return _run_checkpatch(project, commit, ['--no-tree'])
 
 
 def _run_json_check(project, commit):
@@ -339,6 +341,7 @@ _COMMON_HOOKS = [
 _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/third_party/kernel": [_run_checkpatch],
     "chromiumos/third_party/kernel-next": [_run_checkpatch],
+    "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree],
     "chromeos/autotest-tools": [_run_json_check],
 }
 

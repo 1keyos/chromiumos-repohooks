@@ -36,6 +36,9 @@ COMMON_EXCLUDED_PATHS = [
   r".*\bexperimental[\\\/].*",
   r".*\b[A-Z0-9_]{2,}$",
   r".*[\\\/]debian[\\\/]rules$",
+  # for ebuild trees, ignore any caches and manifest data
+  r".*/Manifest$",
+  r".*/metadata/[^/]*cache[^/]*/[^/]+/[^/]+$",
 ]
 
 

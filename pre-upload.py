@@ -39,6 +39,9 @@ COMMON_EXCLUDED_PATHS = [
   # for ebuild trees, ignore any caches and manifest data
   r".*/Manifest$",
   r".*/metadata/[^/]*cache[^/]*/[^/]+/[^/]+$",
+
+  # ignore profiles data (like overlay-tegra2/profiles)
+  r".*/overlay-.*/profiles/.*",
 ]
 
 

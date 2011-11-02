@@ -1,9 +1,11 @@
+#!/usr/bin/env python
 # Copyright (c) 2011 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import ConfigParser
 import json
+import optparse
 import os
 import re
 import sys
@@ -48,18 +50,43 @@ COMMON_EXCLUDED_PATHS = [
 _CONFIG_FILE = 'PRESUBMIT.cfg'
 
 
+# Exceptions
+
+
+class BadInvocation(Exception):
+  """An Exception indicating a bad invocation of the program."""
+  pass
+
+
 # General Helpers
 
 
-def _run_command(cmd):
-  """Executes the passed in command and returns raw stdout output."""
-  return subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
+def _run_command(cmd, cwd=None, stderr=None):
+  """Executes the passed in command and returns raw stdout output.
+
+  Args:
+    cmd: The command to run; should be a list of strings.
+    cwd: The directory to switch to for running the command.
+    stderr: Can be one of None (print stderr to console), subprocess.STDOUT
+        (combine stderr with stdout), or subprocess.PIPE (ignore stderr).
+
+  Returns:
+    The standard out from the process.
+  """
+  p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr, cwd=cwd)
+  return p.communicate()[0]
 
 
 def _get_hooks_dir():
   """Returns the absolute path to the repohooks directory."""
-  cmd = ['repo', 'forall', 'chromiumos/repohooks', '-c', 'pwd']
-  return _run_command(cmd).strip()
+  if __name__ == '__main__':
+    # Works when file is run on its own (__file__ is defined)...
+    return os.path.abspath(os.path.dirname(__file__))
+  else:
+    # We need to do this when we're run through repo.  Since repo executes
+    # us with execfile(), we don't get __file__ defined.
+    cmd = ['repo', 'forall', 'chromiumos/repohooks', '-c', 'pwd']
+    return _run_command(cmd).strip()
 
 
 def _match_regex_list(subject, expressions):
@@ -404,16 +431,20 @@ def _get_project_hooks(project):
   return hooks
 
 
-def _run_project_hooks(project):
+def _run_project_hooks(project, proj_dir=None):
   """For each project run its project specific hook from the hooks dictionary.
 
   Args:
-    project: name of project to run hooks for.
+    project: The name of project to run hooks for.
+    proj_dir: If non-None, this is the directory the project is in.  If None,
+        we'll ask repo.
 
   Returns:
     Boolean value of whether any errors were ecountered while running the hooks.
   """
-  proj_dir = _run_command(['repo', 'forall', project, '-c', 'pwd']).strip()
+  if proj_dir is None:
+    proj_dir = _run_command(['repo', 'forall', project, '-c', 'pwd']).strip()
+
   pwd = os.getcwd()
   # hooks assume they are run from the root of the project
   os.chdir(proj_dir)
@@ -441,7 +472,6 @@ def _run_project_hooks(project):
   os.chdir(pwd)
   return error_found
 
-
 # Main
 
 
@@ -460,5 +490,142 @@ def main(project_list, **kwargs):
     sys.exit(1)
 
 
+def _identify_project(path):
+  """Identify the repo project associated with the given path.
+
+  Returns:
+    A string indicating what project is associated with the path passed in or
+    a blank string upon failure.
+  """
+  return _run_command(['repo', 'forall', '.', '-c', 'echo ${REPO_PROJECT}'],
+    stderr=subprocess.PIPE, cwd=path).strip()
+
+
+def direct_main(args, verbose=False):
+  """Run hooks directly (outside of the context of repo).
+
+  # Setup for doctests below.
+  # ...note that some tests assume that running pre-upload on this CWD is fine.
+  # TODO: Use mock and actually mock out _run_project_hooks() for tests.
+  >>> mydir = os.path.dirname(os.path.abspath(__file__))
+  >>> olddir = os.getcwd()
+
+  # OK to run w/ no arugments; will run with CWD.
+  >>> os.chdir(mydir)
+  >>> direct_main(['prog_name'], verbose=True)
+  Running hooks on chromiumos/repohooks
+  0
+  >>> os.chdir(olddir)
+
+  # Run specifying a dir
+  >>> direct_main(['prog_name', '--dir=%s' % mydir], verbose=True)
+  Running hooks on chromiumos/repohooks
+  0
+
+  # Not a problem to use a bogus project; we'll just get default settings.
+  >>> direct_main(['prog_name', '--dir=%s' % mydir, '--project=X'],verbose=True)
+  Running hooks on X
+  0
+
+  # Run with project but no dir
+  >>> os.chdir(mydir)
+  >>> direct_main(['prog_name', '--project=X'], verbose=True)
+  Running hooks on X
+  0
+  >>> os.chdir(olddir)
+
+  # Try with a non-git CWD
+  >>> os.chdir('/tmp')
+  >>> direct_main(['prog_name'])
+  Traceback (most recent call last):
+    ...
+  BadInvocation: The current directory is not part of a git project.
+
+  # Check various bad arguments...
+  >>> direct_main(['prog_name', 'bogus'])
+  Traceback (most recent call last):
+    ...
+  BadInvocation: Unexpected arguments: bogus
+  >>> direct_main(['prog_name', '--project=bogus', '--dir=bogusdir'])
+  Traceback (most recent call last):
+    ...
+  BadInvocation: Invalid dir: bogusdir
+  >>> direct_main(['prog_name', '--project=bogus', '--dir=/tmp'])
+  Traceback (most recent call last):
+    ...
+  BadInvocation: Not a git directory: /tmp
+
+  Args:
+    args: The value of sys.argv
+
+  Returns:
+    0 if no pre-upload failures, 1 if failures.
+
+  Raises:
+    BadInvocation: On some types of invocation errors.
+  """
+  desc = 'Run Chromium OS pre-upload hooks on changes compared to upstream.'
+  parser = optparse.OptionParser(description=desc)
+
+  parser.add_option('--dir', default=None,
+                    help='The directory that the project lives in.  If not '
+                    'specified, use the git project root based on the cwd.')
+  parser.add_option('--project', default=None,
+                    help='The project repo path; this can affect how the hooks '
+                    'get run, since some hooks are project-specific.  For '
+                    'chromite this is chromiumos/chromite.  If not specified, '
+                    'the repo tool will be used to figure this out based on '
+                    'the dir.')
+
+  opts, args = parser.parse_args(args[1:])
+
+  if args:
+    raise BadInvocation('Unexpected arguments: %s' % ' '.join(args))
+
+  # Check/normlaize git dir; if unspecified, we'll use the root of the git
+  # project from CWD
+  if opts.dir is None:
+    git_dir = _run_command(['git', 'rev-parse', '--git-dir'],
+                           stderr=subprocess.PIPE).strip()
+    if not git_dir:
+      raise BadInvocation('The current directory is not part of a git project.')
+    opts.dir = os.path.dirname(os.path.abspath(git_dir))
+  elif not os.path.isdir(opts.dir):
+    raise BadInvocation('Invalid dir: %s' % opts.dir)
+  elif not os.path.isdir(os.path.join(opts.dir, '.git')):
+    raise BadInvocation('Not a git directory: %s' % opts.dir)
+
+  # Identify the project if it wasn't specified; this _requires_ the repo
+  # tool to be installed and for the project to be part of a repo checkout.
+  if not opts.project:
+    opts.project = _identify_project(opts.dir)
+    if not opts.project:
+      raise BadInvocation("Repo couldn't identify the project of %s" % opts.dir)
+
+  if verbose:
+    print "Running hooks on %s" % (opts.project)
+
+  found_error = _run_project_hooks(opts.project, proj_dir=opts.dir)
+  if found_error:
+    return 1
+  return 0
+
+
+def _test():
+  """Run any built-in tests."""
+  import doctest
+  doctest.testmod()
+
+
 if __name__ == '__main__':
-  main()
+  if sys.argv[1:2] == ["--test"]:
+    _test()
+    exit_code = 0
+  else:
+    prog_name = os.path.basename(sys.argv[0])
+    try:
+      exit_code = direct_main(sys.argv)
+    except BadInvocation, e:
+      print >>sys.stderr, "%s: %s" % (prog_name, str(e))
+      exit_code = 1
+  sys.exit(exit_code)

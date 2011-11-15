@@ -228,7 +228,8 @@ def _check_no_tabs(project, commit):
       r"/src/third_party/u-boot/",
       r".*\.ebuild$",
       r".*\.eclass$",
-      r".*/[M|m]akefile$"
+      r".*/[M|m]akefile$",
+      r".*\.mk$"
   ]
 
   errors = []

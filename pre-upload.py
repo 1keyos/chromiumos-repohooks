@@ -350,6 +350,7 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/third_party/kernel-next": [_run_checkpatch],
     "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree],
     "chromiumos/platform/u-boot-vboot-integration": [_run_checkpatch_no_tree],
+    "chromeos/vendor/ec-internal/blizzard": [_run_checkpatch_no_tree],
     "chromeos/autotest-tools": [_run_json_check],
 }
 

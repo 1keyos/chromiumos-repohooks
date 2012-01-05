@@ -476,6 +476,15 @@ def _run_project_hooks(project, proj_dir=None):
 
 
 def main(project_list, **kwargs):
+  """Main function invoked directly by repo.
+
+  This function will exit directly upon error so that repo doesn't print some
+  obscure error message.
+
+  Args:
+    project_list: List of projects to run on.
+    kwargs: Leave this here for forward-compatibility.
+  """
   found_error = False
   for project in project_list:
     if _run_project_hooks(project):

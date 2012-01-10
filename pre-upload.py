@@ -283,12 +283,13 @@ def _check_change_has_test_field(project, commit):
 
 def _check_change_has_bug_field(project, commit):
   """Check for a correctly formatted 'BUG=' field in the commit message."""
-  BUG_RE = r'\nBUG=([Nn]one|(chrome-os-partner|chromium-os):\d+)'
+  BUG_RE = r'\nBUG=([Nn]one|(chrome-os-partner|chromium|chromium-os):\d+)'
 
   if not re.search(BUG_RE, _get_commit_desc(commit)):
     msg = ('Changelist description needs BUG field (after first line):\n'
-           'BUG=chromium-os:99999 (for public tracker)\n'
+           'BUG=chromium-os:9999 (for public tracker)\n'
            'BUG=chrome-os-partner:9999 (for partner tracker)\n'
+           'BUG=chromium:9999 (for browser tracker)\n'
            'BUG=None')
     return HookFailure(msg)
 

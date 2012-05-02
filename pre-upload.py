@@ -44,6 +44,9 @@ COMMON_EXCLUDED_PATHS = [
 
   # ignore profiles data (like overlay-tegra2/profiles)
   r".*/overlay-.*/profiles/.*",
+  # ignore minified js and jquery
+  r".*\.min\.js",
+  r".*jquery.*\.js",
 ]
 
 

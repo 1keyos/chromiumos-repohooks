@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-# Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
+# Copyright (c) 2011 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import ConfigParser
-import datetime
 import json
 import optparse
 import os
@@ -308,9 +307,8 @@ def _check_change_has_proper_changeid(project, commit):
 
 def _check_license(project, commit):
   """Verifies the license header."""
-  year = str(datetime.datetime.now().year)
   LICENSE_HEADER = (
-     r".*? Copyright \(c\) " + year + " The Chromium OS Authors\. All rights "
+     r".*? Copyright \(c\) 20[-0-9]{2,7} The Chromium OS Authors\. All rights "
        r"reserved\." "\n"
      r".*? Use of this source code is governed by a BSD-style license that can "
        "be\n"

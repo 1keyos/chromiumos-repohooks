@@ -359,6 +359,16 @@ def _run_json_check(project, commit):
       return HookFailure('Invalid JSON in %s: %s' % (f, e))
 
 
+def _check_change_has_branch_field(project, commit):
+  """Check for a non-empty 'BRANCH=' field in the commit message."""
+  BRANCH_RE = r'\nBRANCH=\S+'
+
+  if not re.search(BRANCH_RE, _get_commit_desc(commit)):
+    msg = ('Changelist description needs BRANCH field (after first line)\n'
+           'E.g. BRANCH=none or BRANCH=link,snow')
+    return HookFailure(msg)
+
+
 # Base
 
 
@@ -379,10 +389,16 @@ _COMMON_HOOKS = [
 _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/third_party/kernel": [_run_checkpatch],
     "chromiumos/third_party/kernel-next": [_run_checkpatch],
-    "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree],
-    "chromiumos/platform/u-boot-vboot-integration": [_run_checkpatch_no_tree],
-    "chromiumos/platform/ec": [_run_checkpatch_no_tree],
-    "chromeos/platform/ec-private": [_run_checkpatch_no_tree],
+    "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree,
+                                      _check_change_has_branch_field],
+    "chromiumos/platform/ec": [_run_checkpatch_no_tree,
+                               _check_change_has_branch_field],
+    "chromeos/platform/ec-private": [_run_checkpatch_no_tree,
+                                     _check_change_has_branch_field],
+    "chromeos/third_party/coreboot": [_check_change_has_branch_field],
+    "chromiumos/platform/vboot_reference": [_check_change_has_branch_field],
+    "chromiumos/platform/mosys": [_check_change_has_branch_field],
+    "chromiumos/third_party/flashrom": [_check_change_has_branch_field],
     "chromeos/autotest-tools": [_run_json_check],
 }
 
@@ -394,6 +410,7 @@ _DISABLE_FLAGS = {
     'long_line_check': _check_no_long_lines,
     'cros_license_check': _check_license,
     'tab_check': _check_no_tabs,
+    'branch_check': _check_change_has_branch_field,
 }
 
 
@@ -431,7 +448,8 @@ def _get_project_hooks(project):
   hooks = [hook for hook in _COMMON_HOOKS if hook not in disabled_hooks]
 
   if project in _PROJECT_SPECIFIC_HOOKS:
-    hooks.extend(_PROJECT_SPECIFIC_HOOKS[project])
+    hooks.extend(hook for hook in _PROJECT_SPECIFIC_HOOKS[project]
+                 if hook not in disabled_hooks)
 
   return hooks
 

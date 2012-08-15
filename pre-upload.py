@@ -396,6 +396,7 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromeos/platform/ec-private": [_run_checkpatch_no_tree,
                                      _check_change_has_branch_field],
     "chromeos/third_party/coreboot": [_check_change_has_branch_field],
+    "chromeos/third_party/intel-framework": [_check_change_has_branch_field],
     "chromiumos/platform/vboot_reference": [_check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],
     "chromiumos/third_party/flashrom": [_check_change_has_branch_field],

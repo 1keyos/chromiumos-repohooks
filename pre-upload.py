@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2011 The Chromium OS Authors. All rights reserved.
+# Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -160,6 +160,18 @@ def _get_diff(commit):
   return _run_command(['git', 'show', commit])
 
 
+def _try_utf8_decode(data):
+  """Attempts to decode a string as UTF-8.
+
+  Returns:
+    The decoded Unicode object, or the original string if parsing fails.
+  """
+  try:
+    return unicode(data, 'utf-8', 'strict')
+  except UnicodeDecodeError:
+    return data
+
+
 def _get_file_diff(file, commit):
   """Returns a list of (linenum, lines) tuples that the commit touched."""
   output = _run_command(['git', 'show', '-p', '--no-ext-diff', commit, file])
@@ -172,7 +184,7 @@ def _get_file_diff(file, commit):
       line_num = int(m.groups(1)[0])
       continue
     if line.startswith('+') and not line.startswith('++'):
-      new_lines.append((line_num, line[1:]))
+      new_lines.append((line_num, _try_utf8_decode(line[1:])))
     if not line.startswith('-'):
       line_num += 1
   return new_lines
@@ -210,6 +222,9 @@ def _check_no_long_lines(project, commit):
   the text files to be submitted.
   """
   MAX_LEN = 80
+  SKIP_REGEXP = re.compile('|'.join([
+      r'https?://',
+      r'^#\s*(define|include|import|pragma|if|endif)\b']))
 
   errors = []
   files = _filter_files(_get_affected_files(commit),
@@ -219,18 +234,12 @@ def _check_no_long_lines(project, commit):
   for afile in files:
     for line_num, line in _get_file_diff(afile, commit):
       # Allow certain lines to exceed the maxlen rule.
-      if (len(line) > MAX_LEN and
-          not 'http://' in line and
-          not 'https://' in line and
-          not line.startswith('#define') and
-          not line.startswith('#include') and
-          not line.startswith('#import') and
-          not line.startswith('#pragma') and
-          not line.startswith('#if') and
-          not line.startswith('#endif')):
-        errors.append('%s, line %s, %s chars' % (afile, line_num, len(line)))
-        if len(errors) == 5:  # Just show the first 5 errors.
-          break
+      if (len(line) <= MAX_LEN or SKIP_REGEXP.search(line)):
+        continue
+
+      errors.append('%s, line %s, %s chars' % (afile, line_num, len(line)))
+      if len(errors) == 5:  # Just show the first 5 errors.
+        break
 
   if errors:
     msg = 'Found lines longer than %s characters (first 5 shown):' % MAX_LEN

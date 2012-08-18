@@ -4,6 +4,7 @@
 # found in the LICENSE file.
 
 import ConfigParser
+import functools
 import json
 import optparse
 import os
@@ -378,6 +379,35 @@ def _check_change_has_branch_field(project, commit):
     return HookFailure(msg)
 
 
+def _run_project_hook_script(script, project, commit):
+  """Runs a project hook script.
+
+  The script is run with the following environment variables set:
+    PRESUBMIT_PROJECT: The affected project
+    PRESUBMIT_COMMIT: The affected commit
+    PRESUBMIT_FILES: A newline-separated list of affected files
+
+  The script is considered to fail if the exit code is non-zero.  It should
+  write an error message to stdout.
+  """
+  env = dict(os.environ)
+  env['PRESUBMIT_PROJECT'] = project
+  env['PRESUBMIT_COMMIT'] = commit
+
+  # Put affected files in an environment variable
+  files = _get_affected_files(commit)
+  env['PRESUBMIT_FILES'] = '\n'.join(files)
+
+  process = subprocess.Popen(script, env=env, shell=True,
+                             stdin=open(os.devnull),
+                             stdout=subprocess.PIPE)
+  stdout, _ = process.communicate()
+  if process.wait():
+    return HookFailure('Hook script %s failed with code %d%s' %
+                       (script, process.returncode,
+                        ':\n' + stdout if stdout else ''))
+
+
 # Base
 
 
@@ -424,21 +454,20 @@ _DISABLE_FLAGS = {
 }
 
 
-def _get_disabled_hooks():
+def _get_disabled_hooks(config):
   """Returns a set of hooks disabled by the current project's config file.
 
   Expects to be called within the project root.
+
+  Args:
+    config: A ConfigParser for the project's config file.
   """
   SECTION = 'Hook Overrides'
-  config = ConfigParser.RawConfigParser()
-  try:
-    config.read(_CONFIG_FILE)
-    flags = config.options(SECTION)
-  except ConfigParser.Error:
-    return set([])
+  if not config.has_section(SECTION):
+    return set()
 
   disable_flags = []
-  for flag in flags:
+  for flag in config.options(SECTION):
     try:
       if not config.getboolean(SECTION, flag): disable_flags.append(flag)
     except ValueError as e:
@@ -449,17 +478,42 @@ def _get_disabled_hooks():
   return set([_DISABLE_FLAGS[key] for key in disabled_keys])
 
 
+def _get_project_hook_scripts(config):
+  """Returns a list of project-specific hook scripts.
+
+  Args:
+    config: A ConfigParser for the project's config file.
+  """
+  SECTION = 'Hook Scripts'
+  if not config.has_section(SECTION):
+    return []
+
+  hook_names_values = config.items(SECTION)
+  hook_names_values.sort(key=lambda x: x[0])
+  return [x[1] for x in hook_names_values]
+
+
 def _get_project_hooks(project):
   """Returns a list of hooks that need to be run for a project.
 
   Expects to be called from within the project root.
   """
-  disabled_hooks = _get_disabled_hooks()
+  config = ConfigParser.RawConfigParser()
+  try:
+    config.read(_CONFIG_FILE)
+  except ConfigParser.Error:
+    # Just use an empty config file
+    config = ConfigParser.RawConfigParser()
+
+  disabled_hooks = _get_disabled_hooks(config)
   hooks = [hook for hook in _COMMON_HOOKS if hook not in disabled_hooks]
 
   if project in _PROJECT_SPECIFIC_HOOKS:
     hooks.extend(hook for hook in _PROJECT_SPECIFIC_HOOKS[project]
                  if hook not in disabled_hooks)
+
+  for script in _get_project_hook_scripts(config):
+    hooks.append(functools.partial(_run_project_hook_script, script))
 
   return hooks
 

@@ -406,10 +406,13 @@ def _run_project_hook_script(script, project, commit):
 
   process = subprocess.Popen(script, env=env, shell=True,
                              stdin=open(os.devnull),
-                             stdout=subprocess.PIPE)
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT)
   stdout, _ = process.communicate()
   if process.wait():
-    return HookFailure('Hook script %s failed with code %d%s' %
+    if stdout:
+      stdout = re.sub('(?m)^', '  ', stdout)
+    return HookFailure('Hook script "%s" failed with code %d%s' %
                        (script, process.returncode,
                         ':\n' + stdout if stdout else ''))
 

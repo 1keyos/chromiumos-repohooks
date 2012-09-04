@@ -359,6 +359,12 @@ def _run_checkpatch(project, commit, options=[]):
 def _run_checkpatch_no_tree(project, commit):
   return _run_checkpatch(project, commit, ['--no-tree'])
 
+def _kernel_configcheck(project, commit):
+  """Makes sure kernel config changes are not mixed with code changes"""
+  files = _get_affected_files(commit)
+  if not len(_filter_files(files, [r'chromeos/config'])) in [0, len(files)]:
+    return HookFailure('Changes to chromeos/config/ and regular files must '
+                       'be in separate commits:\n%s' % '\n'.join(files))
 
 def _run_json_check(project, commit):
   """Checks that all JSON files are syntactically valid."""
@@ -426,8 +432,9 @@ _COMMON_HOOKS = [
 # A dictionary of project-specific hooks(callbacks), indexed by project name.
 # dict[project] = [callback1, callback2]
 _PROJECT_SPECIFIC_HOOKS = {
-    "chromiumos/third_party/kernel": [_run_checkpatch],
-    "chromiumos/third_party/kernel-next": [_run_checkpatch],
+    "chromiumos/third_party/kernel": [_run_checkpatch, _kernel_configcheck],
+    "chromiumos/third_party/kernel-next": [_run_checkpatch,
+                                           _kernel_configcheck],
     "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree,
                                       _check_change_has_branch_field],
     "chromiumos/platform/ec": [_run_checkpatch_no_tree,

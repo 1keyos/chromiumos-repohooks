@@ -56,6 +56,44 @@ class CheckNoLongLinesTest(unittest.TestCase):
                        for line in [3, 4, 8]],
                       failure.items)
 
+class CheckKernelConfig(unittest.TestCase):
+  def tearDown(self):
+    self.mocker.UnsetStubs()
+
+  def runTest(self):
+    self.mocker = mox.Mox();
+
+    # Mixed changes, should fail
+    self.mocker.StubOutWithMock(pre_upload, '_get_affected_files')
+    pre_upload._get_affected_files(mox.IgnoreArg()).AndReturn(
+        ['/kernel/files/chromeos/config/base.config',
+         '/kernel/files/arch/arm/mach-exynos/mach-exynos5-dt.c'
+        ])
+    self.mocker.ReplayAll()
+    failure = pre_upload._kernel_configcheck('PROJECT', 'COMMIT')
+    self.assertTrue(failure)
+
+    # Code-only changes, should pass
+    self.mocker.UnsetStubs()
+    self.mocker.StubOutWithMock(pre_upload, '_get_affected_files')
+    pre_upload._get_affected_files(mox.IgnoreArg()).AndReturn(
+        ['/kernel/files/Makefile',
+         '/kernel/files/arch/arm/mach-exynos/mach-exynos5-dt.c'
+        ])
+    self.mocker.ReplayAll()
+    failure = pre_upload._kernel_configcheck('PROJECT', 'COMMIT')
+    self.assertFalse(failure)
+
+    # Config-only changes, should pass
+    self.mocker.UnsetStubs()
+    self.mocker.StubOutWithMock(pre_upload, '_get_affected_files')
+    pre_upload._get_affected_files(mox.IgnoreArg()).AndReturn(
+        ['/kernel/files/chromeos/config/base.config',
+        ])
+    self.mocker.ReplayAll()
+    failure = pre_upload._kernel_configcheck('PROJECT', 'COMMIT')
+    self.assertFalse(failure)
+
 
 if __name__ == '__main__':
   unittest.main()

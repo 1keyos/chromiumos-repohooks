@@ -358,6 +358,16 @@ def _check_license(project, commit):
   return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
 
 
+def _check_google_copyright(project, commit):
+  """Verifies Google Inc. as copyright holder."""
+  LICENSE_HEADER = (
+     r".* Copyright 20[-0-9]{2,7} Google Inc\."
+  )
+  FAIL_MSG = "Copyright must match"
+
+  return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
+
+
 # Project-specific hooks
 
 

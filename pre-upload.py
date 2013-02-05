@@ -24,7 +24,7 @@ COMMON_INCLUDED_PATHS = [
   r".*\.js$", r".*\.py$", r".*\.sh$", r".*\.rb$", r".*\.pl$", r".*\.pm$",
   # No extension at all, note that ALL CAPS files are black listed in
   # COMMON_EXCLUDED_LIST below.
-  r"(^|.*?[\\\/])[^.]+$",
+  r"(^|.*[\\\/])[^.]+$",
   # Other
   r".*\.java$", r".*\.mk$", r".*\.am$",
 ]
@@ -346,11 +346,11 @@ def _check_change_has_proper_changeid(project, commit):
 def _check_license(project, commit):
   """Verifies the license header."""
   LICENSE_HEADER = (
-     r".*? Copyright \(c\) 20[-0-9]{2,7} The Chromium OS Authors\. All rights "
+     r".* Copyright \(c\) 20[-0-9]{2,7} The Chromium OS Authors\. All rights "
        r"reserved\." "\n"
-     r".*? Use of this source code is governed by a BSD-style license that can "
+     r".* Use of this source code is governed by a BSD-style license that can "
        "be\n"
-     r".*? found in the LICENSE file\."
+     r".* found in the LICENSE file\."
        "\n"
   )
   FAIL_MSG = "License must match"

@@ -133,6 +133,34 @@ def _filter_files(files, include_list, exclude_list=[]):
   return filtered
 
 
+def _verify_header_content(commit, content, fail_msg):
+  """Verify that file headers contain specified content.
+
+  Args:
+    commit: the affected commit.
+    content: the content of the header to be verified.
+    fail_msg: the first message to display in case of failure.
+
+    Returns:
+      The return value of HookFailure().
+  """
+  license_re = re.compile(content, re.MULTILINE)
+  bad_files = []
+  files = _filter_files(_get_affected_files(commit),
+                        COMMON_INCLUDED_PATHS,
+                        COMMON_EXCLUDED_PATHS)
+
+  for f in files:
+    contents = open(f).read()
+    if len(contents) == 0: continue  # Ignore empty files
+    if not license_re.search(contents):
+      bad_files.append(f)
+  if bad_files:
+     msg = "%s:\n%s\n%s" % (fail_msg, license_re.pattern,
+                            "Found a bad header in these files:")
+     return HookFailure(msg, bad_files)
+
+
 # Git Helpers
 
 
@@ -325,22 +353,9 @@ def _check_license(project, commit):
      r".*? found in the LICENSE file\."
        "\n"
   )
+  FAIL_MSG = "License must match"
 
-  license_re = re.compile(LICENSE_HEADER, re.MULTILINE)
-  bad_files = []
-  files = _filter_files(_get_affected_files(commit),
-                        COMMON_INCLUDED_PATHS,
-                        COMMON_EXCLUDED_PATHS)
-
-  for f in files:
-    contents = open(f).read()
-    if len(contents) == 0: continue  # Ignore empty files
-    if not license_re.search(contents):
-      bad_files.append(f)
-  if bad_files:
-    return HookFailure('License must match:\n%s\n' % license_re.pattern +
-                          'Found a bad license header in these files:',
-                          bad_files)
+  return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
 
 
 # Project-specific hooks

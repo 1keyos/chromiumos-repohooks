@@ -9,6 +9,7 @@ import json
 import optparse
 import os
 import re
+import socket
 import sys
 import subprocess
 
@@ -364,6 +365,11 @@ def _check_google_copyright(project, commit):
      r".* Copyright 20[-0-9]{2,7} Google Inc\."
   )
   FAIL_MSG = "Copyright must match"
+
+  # Avoid blocking partners and external contributors.
+  fqdn = socket.getfqdn()
+  if not fqdn.endswith(".corp.google.com"):
+    return None
 
   return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
 

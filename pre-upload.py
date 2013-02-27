@@ -152,10 +152,11 @@ def _verify_header_content(commit, content, fail_msg):
                         COMMON_EXCLUDED_PATHS)
 
   for f in files:
-    contents = open(f).read()
-    if len(contents) == 0: continue  # Ignore empty files
-    if not license_re.search(contents):
-      bad_files.append(f)
+    if os.path.exists(f): # Ignore non-existant files
+      contents = open(f).read()
+      if len(contents) == 0: continue  # Ignore empty files
+      if not license_re.search(contents):
+        bad_files.append(f)
   if bad_files:
      msg = "%s:\n%s\n%s" % (fail_msg, license_re.pattern,
                             "Found a bad header in these files:")

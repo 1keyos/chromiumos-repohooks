@@ -186,9 +186,9 @@ def _get_upstream_branch():
   return full_upstream.replace('heads', 'remotes/' + remote)
 
 
-def _get_diff(commit):
-  """Returns the diff for this commit."""
-  return _run_command(['git', 'show', commit])
+def _get_patch(commit):
+  """Returns the patch for this commit."""
+  return _run_command(['git', 'format-patch', '--stdout', '-1', commit])
 
 
 def _try_utf8_decode(data):
@@ -383,7 +383,7 @@ def _run_checkpatch(project, commit, options=[]):
   hooks_dir = _get_hooks_dir()
   cmd = ['%s/checkpatch.pl' % hooks_dir] + options + ['-']
   p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-  output = p.communicate(_get_diff(commit))[0]
+  output = p.communicate(_get_patch(commit))[0]
   if p.returncode:
     return HookFailure('checkpatch.pl errors/warnings\n\n' + output)
 

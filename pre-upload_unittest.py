@@ -5,10 +5,14 @@
 # found in the LICENSE file.
 
 import mox
+import os
+import sys
 import unittest
 
 
 # pylint: disable=W0212
+if __name__ == '__main__':
+  sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
 pre_upload = __import__('pre-upload')
 

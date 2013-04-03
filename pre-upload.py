@@ -16,6 +16,14 @@ import subprocess
 from errors import (VerifyException, HookFailure, PrintErrorForProject,
                     PrintErrorsForCommit)
 
+# If repo imports us, the __name__ will be __builtin__, and the wrapper will
+# be in $CHROMEOS_CHECKOUT/.repo/repo/main.py, so we need to go two directories
+# up. The same logic also happens to work if we're executed directly.
+if __name__ in ('__builtin__', '__main__'):
+  sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
+
+from chromite.lib import patch
+
 
 COMMON_INCLUDED_PATHS = [
   # C++ and friends
@@ -324,6 +332,16 @@ def _check_change_has_test_field(project, commit):
     return HookFailure(msg)
 
 
+def _check_change_has_valid_cq_depend(project, commit):
+  """Check for a correctly formatted CQ-DEPEND field in the commit message."""
+  msg = 'Changelist has invalid CQ-DEPEND target.'
+  example = 'Example: CQ-DEPEND=CL:1234, CL:2345'
+  try:
+    patch.GetPaladinDeps(_get_commit_desc(commit))
+  except ValueError as ex:
+    return HookFailure(msg, [example, str(ex)])
+
+
 def _check_change_has_bug_field(project, commit):
   """Check for a correctly formatted 'BUG=' field in the commit message."""
   OLD_BUG_RE = r'\nBUG=.*chromium-os'
@@ -459,6 +477,7 @@ def _run_project_hook_script(script, project, commit):
 # A list of hooks that are not project-specific
 _COMMON_HOOKS = [
     _check_change_has_bug_field,
+    _check_change_has_valid_cq_depend,
     _check_change_has_test_field,
     _check_change_has_proper_changeid,
     _check_no_stray_whitespace,

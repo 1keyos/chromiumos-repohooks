@@ -229,14 +229,22 @@ def _get_file_diff(file, commit):
   return new_lines
 
 
-def _get_affected_files(commit):
-  """Returns list of absolute filepaths that were modified/added."""
+def _get_affected_files(commit, include_deletes=False):
+  """Returns list of absolute filepaths that were modified/added.
+
+  Args:
+    commit: The commit
+    include_deletes: If true we'll include delete in the list.
+
+  Returns:
+    A list of modified/added (and perhaps deleted) files
+  """
   output = _run_command(['git', 'diff', '--name-status', commit + '^!'])
   files = []
   for statusline in output.splitlines():
     m = re.match('^(\w)+\t(.+)$', statusline.rstrip())
     # Ignore deleted files, and return absolute paths of files
-    if (m.group(1)[0] != 'D'):
+    if (include_deletes or m.group(1)[0] != 'D'):
       pwd = os.getcwd()
       files.append(os.path.join(pwd, m.group(2)))
   return files
@@ -357,6 +365,85 @@ def _check_change_has_bug_field(project, commit):
            'BUG=chrome-os-partner:9999 (for partner tracker)\n'
            'BUG=None')
     return HookFailure(msg)
+
+
+def _check_for_uprev(project, commit):
+  """Check that we're not missing a revbump of an ebuild in the given commit.
+
+  If the given commit touches files in a directory that has ebuilds somewhere
+  up the directory hierarchy, it's very likely that we need an ebuild revbump
+  in order for those changes to take effect.
+
+  It's not totally trivial to detect a revbump, so at least detect that an
+  ebuild with a revision number in it was touched.  This should handle the
+  common case where we use a symlink to do the revbump.
+
+  TODO: it would be nice to enhance this hook to:
+  * Handle cases where people revbump with a slightly different syntax.  I see
+    one ebuild (puppy) that revbumps with _pN.  This is a false positive.
+  * Catches cases where people aren't using symlinks for revbumps.  If they
+    edit a revisioned file directly (and are expected to rename it for revbump)
+    we'll miss that.  Perhaps we could detect that the file touched is a
+    symlink?
+
+  If a project doesn't use symlinks we'll potentially miss a revbump, but we're
+  still better off than without this check.
+
+  Args:
+    project: The project to look at
+    commit: The commit to look at
+
+  Returns:
+    A HookFailure or None.
+  """
+  affected_paths = _get_affected_files(commit, include_deletes=True)
+
+  # Don't yell about changes to whitelisted files...
+  whitelist = ['Manifest', 'metadata.xml']
+  affected_paths = [path for path in affected_paths
+                    if os.path.basename(path) not in whitelist]
+  if not affected_paths:
+    return None
+
+  # If we've touched any file named with a -rN.ebuild then we'll say we're
+  # OK right away.  See TODO above about enhancing this.
+  touched_revved_ebuild = any(re.search(r'-r\d*\.ebuild$', path)
+                              for path in affected_paths)
+  if touched_revved_ebuild:
+    return None
+
+  # We want to examine the current contents of all directories that are parents
+  # of files that were touched (up to the top of the project).
+  #
+  # ...note: we use the current directory contents even though it may have
+  # changed since the commit we're looking at.  This is just a heuristic after
+  # all.  Worst case we don't flag a missing revbump.
+  project_top = os.getcwd()
+  dirs_to_check = set([project_top])
+  for path in affected_paths:
+    path = os.path.dirname(path)
+    while os.path.exists(path) and not os.path.samefile(path, project_top):
+      dirs_to_check.add(path)
+      path = os.path.dirname(path)
+
+  # Look through each directory.  If it's got an ebuild in it then we'll
+  # consider this as a case when we need a revbump.
+  for dir_path in dirs_to_check:
+    contents = os.listdir(dir_path)
+    ebuilds = [os.path.join(dir_path, path)
+               for path in contents if path.endswith('.ebuild')]
+    ebuilds_9999 = [path for path in ebuilds if path.endswith('-9999.ebuild')]
+
+    # If the -9999.ebuild file was touched the bot will uprev for us.
+    # ...we'll use a simple intersection here as a heuristic...
+    if set(ebuilds_9999) & set(affected_paths):
+      continue
+
+    if ebuilds:
+      return HookFailure('Changelist probably needs a revbump of an ebuild\n'
+                         'or a -r1.ebuild symlink if this is a new ebuild')
+
+  return None
 
 
 def _check_change_has_proper_changeid(project, commit):
@@ -484,6 +571,7 @@ _COMMON_HOOKS = [
     _check_no_long_lines,
     _check_license,
     _check_no_tabs,
+    _check_for_uprev,
 ]
 
 

@@ -587,13 +587,15 @@ def _get_project_hooks(project):
   return hooks
 
 
-def _run_project_hooks(project, proj_dir=None):
+def _run_project_hooks(project, proj_dir=None, commit_list=None):
   """For each project run its project specific hook from the hooks dictionary.
 
   Args:
     project: The name of project to run hooks for.
     proj_dir: If non-None, this is the directory the project is in.  If None,
         we'll ask repo.
+    commit_list: A list of commits to run hooks against.  If None or empty list
+        then we'll automatically get the list of commits that would be uploaded.
 
   Returns:
     Boolean value of whether any errors were ecountered while running the hooks.
@@ -605,12 +607,13 @@ def _run_project_hooks(project, proj_dir=None):
   # hooks assume they are run from the root of the project
   os.chdir(proj_dir)
 
-  try:
-    commit_list = _get_commits()
-  except VerifyException as e:
-    PrintErrorForProject(project, HookFailure(str(e)))
-    os.chdir(pwd)
-    return True
+  if not commit_list:
+    try:
+      commit_list = _get_commits()
+    except VerifyException as e:
+      PrintErrorForProject(project, HookFailure(str(e)))
+      os.chdir(pwd)
+      return True
 
   hooks = _get_project_hooks(project)
   error_found = False
@@ -741,11 +744,28 @@ def direct_main(args, verbose=False):
                     'chromite this is chromiumos/chromite.  If not specified, '
                     'the repo tool will be used to figure this out based on '
                     'the dir.')
+  parser.add_option('--rerun-since', default=None,
+                    help='Rerun hooks on old commits since the given date.  '
+                    'The date should match git log\'s concept of a date.  '
+                    'e.g. 2012-06-20')
+
+  parser.usage = "pre-upload.py [options] [commits]"
 
   opts, args = parser.parse_args(args[1:])
 
-  if args:
-    raise BadInvocation('Unexpected arguments: %s' % ' '.join(args))
+  if opts.rerun_since:
+    if args:
+      raise BadInvocation('Can\'t pass commits and use rerun-since: %s' %
+                          ' '.join(args))
+
+    cmd = ['git', 'log', '--since="%s"' % opts.rerun_since, '--pretty=%H']
+    all_commits = _run_command(cmd).splitlines()
+    bot_commits = _run_command(cmd + ['--author=chrome-bot']).splitlines()
+
+    # Eliminate chrome-bot commits but keep ordering the same...
+    bot_commits = set(bot_commits)
+    args = [c for c in all_commits if c not in bot_commits]
+
 
   # Check/normlaize git dir; if unspecified, we'll use the root of the git
   # project from CWD
@@ -770,7 +790,8 @@ def direct_main(args, verbose=False):
   if verbose:
     print "Running hooks on %s" % (opts.project)
 
-  found_error = _run_project_hooks(opts.project, proj_dir=opts.dir)
+  found_error = _run_project_hooks(opts.project, proj_dir=opts.dir,
+                                   commit_list=args)
   if found_error:
     return 1
   return 0

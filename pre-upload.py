@@ -516,6 +516,27 @@ def _run_json_check(project, commit):
       return HookFailure('Invalid JSON in %s: %s' % (f, e))
 
 
+def _check_manifests(project, commit):
+  """Make sure Manifest files only have DIST lines"""
+  paths = []
+
+  for path in _get_affected_files(commit):
+    if os.path.basename(path) != 'Manifest':
+      continue
+    if not os.path.exists(path):
+      continue
+
+    with open(path, 'r') as f:
+      for line in f.readlines():
+        if not line.startswith('DIST '):
+          paths.append(path)
+          break
+
+  if paths:
+    return HookFailure('Please remove lines that do not start with DIST:\n%s' %
+                       ('\n'.join(paths),))
+
+
 def _check_change_has_branch_field(project, commit):
   """Check for a non-empty 'BRANCH=' field in the commit message."""
   BRANCH_RE = r'\nBRANCH=\S+'
@@ -579,6 +600,8 @@ _COMMON_HOOKS = [
 # dict[project] = [callback1, callback2]
 _PROJECT_SPECIFIC_HOOKS = {
     "chromeos/autotest-tools": [_run_json_check],
+    "chromeos/overlays/chromeos-overlay": [_check_manifests],
+    "chromeos/overlays/chromeos-partner-overlay": [_check_manifests],
     "chromeos/platform/ec-private": [_run_checkpatch_no_tree,
                                      _check_change_has_branch_field],
     "chromeos/third_party/coreboot": [_check_change_has_branch_field,
@@ -587,6 +610,9 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromeos/vendor/kernel-exynos-staging": [_run_checkpatch,
                                               _kernel_configcheck],
     "chromeos/vendor/u-boot-exynos": [_run_checkpatch_no_tree],
+    "chromiumos/overlays/board-overlays": [_check_manifests],
+    "chromiumos/overlays/chromiumos-overlay": [_check_manifests],
+    "chromiumos/overlays/portage-stable": [_check_manifests],
     "chromiumos/platform/ec": [_run_checkpatch_no_tree,
                                _check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],

@@ -578,25 +578,25 @@ _COMMON_HOOKS = [
 # A dictionary of project-specific hooks(callbacks), indexed by project name.
 # dict[project] = [callback1, callback2]
 _PROJECT_SPECIFIC_HOOKS = {
-    "chromiumos/third_party/kernel": [_run_checkpatch, _kernel_configcheck],
-    "chromiumos/third_party/kernel-next": [_run_checkpatch,
-                                           _kernel_configcheck],
-    "chromeos/vendor/kernel-exynos-staging": [_run_checkpatch,
-                                              _kernel_configcheck],
-    "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree,
-                                      _check_change_has_branch_field],
-    "chromeos/vendor/u-boot-exynos": [_run_checkpatch_no_tree],
-    "chromiumos/platform/ec": [_run_checkpatch_no_tree,
-                               _check_change_has_branch_field],
+    "chromeos/autotest-tools": [_run_json_check],
     "chromeos/platform/ec-private": [_run_checkpatch_no_tree,
                                      _check_change_has_branch_field],
     "chromeos/third_party/coreboot": [_check_change_has_branch_field,
                                       _check_google_copyright],
     "chromeos/third_party/intel-framework": [_check_change_has_branch_field],
-    "chromiumos/platform/vboot_reference": [_check_change_has_branch_field],
+    "chromeos/vendor/kernel-exynos-staging": [_run_checkpatch,
+                                              _kernel_configcheck],
+    "chromeos/vendor/u-boot-exynos": [_run_checkpatch_no_tree],
+    "chromiumos/platform/ec": [_run_checkpatch_no_tree,
+                               _check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],
+    "chromiumos/platform/vboot_reference": [_check_change_has_branch_field],
     "chromiumos/third_party/flashrom": [_check_change_has_branch_field],
-    "chromeos/autotest-tools": [_run_json_check],
+    "chromiumos/third_party/kernel": [_run_checkpatch, _kernel_configcheck],
+    "chromiumos/third_party/kernel-next": [_run_checkpatch,
+                                           _kernel_configcheck],
+    "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree,
+                                      _check_change_has_branch_field],
 }
 
 

@@ -3,6 +3,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+from __future__ import print_function
+
 import ConfigParser
 import functools
 import json
@@ -655,7 +657,7 @@ def _get_disabled_hooks(config):
       if not config.getboolean(SECTION, flag): disable_flags.append(flag)
     except ValueError as e:
       msg = "Error parsing flag \'%s\' in %s file - " % (flag, _CONFIG_FILE)
-      print msg + str(e)
+      print(msg + str(e))
 
   disabled_keys = set(_DISABLE_FLAGS.iterkeys()).intersection(disable_flags)
   return set([_DISABLE_FLAGS[key] for key in disabled_keys])
@@ -768,7 +770,7 @@ def main(project_list, **kwargs):
            '- To disable some source style checks, and for other hints, see '
            '<checkout_dir>/src/repohooks/README\n'
            '- To upload only current project, run \'repo upload .\'')
-    print >> sys.stderr, msg
+    print(msg, file=sys.stderr)
     sys.exit(1)
 
 
@@ -902,7 +904,7 @@ def direct_main(args, verbose=False):
       raise BadInvocation("Repo couldn't identify the project of %s" % opts.dir)
 
   if verbose:
-    print "Running hooks on %s" % (opts.project)
+    print("Running hooks on %s" % (opts.project))
 
   found_error = _run_project_hooks(opts.project, proj_dir=opts.dir,
                                    commit_list=args)
@@ -926,6 +928,6 @@ if __name__ == '__main__':
     try:
       exit_code = direct_main(sys.argv)
     except BadInvocation, e:
-      print >>sys.stderr, "%s: %s" % (prog_name, str(e))
+      print("%s: %s" % (prog_name, str(e)), file=sys.stderr)
       exit_code = 1
   sys.exit(exit_code)

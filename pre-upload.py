@@ -717,7 +717,17 @@ def _run_project_hooks(project, proj_dir=None, commit_list=None):
     Boolean value of whether any errors were ecountered while running the hooks.
   """
   if proj_dir is None:
-    proj_dir = _run_command(['repo', 'forall', project, '-c', 'pwd']).strip()
+    proj_dirs = _run_command(['repo', 'forall', project, '-c', 'pwd']).split()
+    if len(proj_dirs) == 0:
+      print('%s cannot be found.' % project, file=sys.stderr)
+      print('Please specify a valid project.', file=sys.stderr)
+      return True
+    if len(proj_dirs) > 1:
+      print('%s is associated with multiple directories.' % project,
+            file=sys.stderr)
+      print('Please specify a directory to help disambiguate.', file=sys.stderr)
+      return True
+    proj_dir = proj_dirs[0]
 
   pwd = os.getcwd()
   # hooks assume they are run from the root of the project
@@ -750,7 +760,7 @@ def _run_project_hooks(project, proj_dir=None, commit_list=None):
 # Main
 
 
-def main(project_list, **kwargs):
+def main(project_list, worktree_list=None, **kwargs):
   """Main function invoked directly by repo.
 
   This function will exit directly upon error so that repo doesn't print some
@@ -758,11 +768,17 @@ def main(project_list, **kwargs):
 
   Args:
     project_list: List of projects to run on.
+    worktree_list: A list of directories. It should be the same length as
+      project_list, so that each entry in project_list matches with a directory
+      in worktree_list. If None, we will attempt to calculate the directories
+      automatically.
     kwargs: Leave this here for forward-compatibility.
   """
   found_error = False
-  for project in project_list:
-    if _run_project_hooks(project):
+  if not worktree_list:
+    worktree_list = [None] * len(project_list)
+  for project, worktree in zip(project_list, worktree_list):
+    if _run_project_hooks(project, proj_dir=worktree):
       found_error = True
 
   if (found_error):

@@ -25,6 +25,7 @@ if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
 from chromite.lib import patch
+from chromite.licensing import licenses
 
 
 COMMON_INCLUDED_PATHS = [
@@ -448,6 +449,33 @@ def _check_for_uprev(project, commit):
   return None
 
 
+def _check_ebuild_licenses(_project, commit):
+  """Check if the LICENSE field in the ebuild is correct."""
+  affected_paths = _get_affected_files(commit)
+  touched_ebuilds = [x for x in affected_paths if x.endswith('.ebuild')]
+
+  # A list of licenses to ignore for now.
+  LICENSES_IGNORE = ['||', '(', ')', 'Proprietary', 'as-is']
+
+  for ebuild in touched_ebuilds:
+    # Skip virutal packages.
+    if ebuild.split('/')[-3] == 'virtual':
+      continue
+
+    try:
+      license_types = licenses.GetLicenseTypesFromEbuild(ebuild)
+    except ValueError as e:
+      return HookFailure(e.message, [ebuild])
+
+    # Also ignore licenses ending with '?'
+    for license_type in [x for x in license_types
+                         if x not in LICENSES_IGNORE and not x.endswith('?')]:
+      try:
+        licenses.Licensing.FindLicenseType(license_type)
+      except AssertionError as e:
+        return HookFailure(e.message, [ebuild])
+
+
 def _check_change_has_proper_changeid(project, commit):
   """Verify that Change-ID is present in last paragraph of commit message."""
   desc = _get_commit_desc(commit)
@@ -595,6 +623,7 @@ _COMMON_HOOKS = [
     _check_change_has_valid_cq_depend,
     _check_change_has_test_field,
     _check_change_has_proper_changeid,
+    _check_ebuild_licenses,
     _check_no_stray_whitespace,
     _check_no_long_lines,
     _check_license,

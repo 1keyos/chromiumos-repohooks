@@ -502,6 +502,11 @@ def _run_checkpatch(project, commit, options=[]):
 def _run_checkpatch_no_tree(project, commit):
   return _run_checkpatch(project, commit, ['--no-tree'])
 
+def _run_checkpatch_ec(project, commit):
+  """Runs checkpatch with options for Chromium EC projects."""
+  return _run_checkpatch(project, commit, ['--no-tree',
+                                           '--ignore=MSLEEP,VOLATILE'])
+
 def _kernel_configcheck(project, commit):
   """Makes sure kernel config changes are not mixed with code changes"""
   files = _get_affected_files(commit)
@@ -604,7 +609,7 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromeos/autotest-tools": [_run_json_check],
     "chromeos/overlays/chromeos-overlay": [_check_manifests],
     "chromeos/overlays/chromeos-partner-overlay": [_check_manifests],
-    "chromeos/platform/ec-private": [_run_checkpatch_no_tree,
+    "chromeos/platform/ec-private": [_run_checkpatch_ec,
                                      _check_change_has_branch_field],
     "chromeos/third_party/coreboot": [_check_change_has_branch_field,
                                       _check_google_copyright],
@@ -615,7 +620,7 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/overlays/board-overlays": [_check_manifests],
     "chromiumos/overlays/chromiumos-overlay": [_check_manifests],
     "chromiumos/overlays/portage-stable": [_check_manifests],
-    "chromiumos/platform/ec": [_run_checkpatch_no_tree,
+    "chromiumos/platform/ec": [_run_checkpatch_ec,
                                _check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],
     "chromiumos/platform/vboot_reference": [_check_change_has_branch_field],

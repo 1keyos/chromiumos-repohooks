@@ -399,10 +399,19 @@ def _check_for_uprev(project, commit):
   Returns:
     A HookFailure or None.
   """
+  # If this is the portage-stable overlay, then ignore the check.  It's rare
+  # that we're doing anything other than importing files from upstream, so
+  # forcing a rev bump makes no sense.
+  whitelist = (
+      'chromiumos/overlays/portage-stable',
+  )
+  if project in whitelist:
+    return None
+
   affected_paths = _get_affected_files(commit, include_deletes=True)
 
   # Don't yell about changes to whitelisted files...
-  whitelist = ['Manifest', 'metadata.xml']
+  whitelist = ('ChangeLog', 'Manifest', 'metadata.xml')
   affected_paths = [path for path in affected_paths
                     if os.path.basename(path) not in whitelist]
   if not affected_paths:

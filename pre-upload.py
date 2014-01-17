@@ -458,6 +458,48 @@ def _check_for_uprev(project, commit):
   return None
 
 
+def _check_keywords(project, commit):
+  """Make sure we use the new style KEYWORDS when possible in ebuilds.
+
+  If an ebuild generally does not care about the arch it is running on, then
+  ebuilds should flag it with one of:
+    KEYWORDS="*"       # A stable ebuild.
+    KEYWORDS="~*"      # An unstable ebuild.
+    KEYWORDS="-* ..."  # Is known to only work on specific arches.
+
+  Args:
+    project: The project to look at
+    commit: The commit to look at
+
+  Returns:
+    A HookFailure or None.
+  """
+  WHITELIST = set(('*', '-*', '~*'))
+
+  get_keywords = re.compile(r'^\s*KEYWORDS="(.*)"')
+
+  ebuilds = [x for x in _get_affected_files(commit) if x.endswith('.ebuild')]
+  for ebuild in ebuilds:
+    for _, line in _get_file_diff(ebuild, commit):
+      m = get_keywords.match(line)
+      if m:
+        keywords = set(m.group(1).split())
+        if not keywords or WHITELIST - keywords != WHITELIST:
+          continue
+
+        return HookFailure(
+            'Please update KEYWORDS to use a glob:\n'
+            'If the ebuild should be marked stable (normal for non-9999 '
+            'ebuilds):\n'
+            '  KEYWORDS="*"\n'
+            'If the ebuild should be marked unstable (normal for '
+            'cros-workon / 9999 ebuilds):\n'
+            '  KEYWORDS="~*"\n'
+            'If the ebuild needs to be marked for only specific arches,'
+            'then use -* like so:\n'
+            '  KEYWORDS="-* arm ..."\n')
+
+
 def _check_ebuild_licenses(_project, commit):
   """Check if the LICENSE field in the ebuild is correct."""
   affected_paths = _get_affected_files(commit)
@@ -638,6 +680,7 @@ _COMMON_HOOKS = [
     _check_license,
     _check_no_tabs,
     _check_for_uprev,
+    _check_keywords,
 ]
 
 

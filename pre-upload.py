@@ -582,6 +582,16 @@ def _check_change_has_branch_field(project, commit):
     return HookFailure(msg)
 
 
+def _check_change_has_signoff_field(project, commit):
+  """Check for a non-empty 'Signed-off-by:' field in the commit message."""
+  SIGNOFF_RE = r'\nSigned-off-by: \S+'
+
+  if not re.search(SIGNOFF_RE, _get_commit_desc(commit)):
+    msg = ('Changelist description needs Signed-off-by: field\n'
+           'E.g. Signed-off-by: My Name <me@chromium.org>')
+    return HookFailure(msg)
+
+
 def _run_project_hook_script(script, project, commit):
   """Runs a project hook script.
 
@@ -669,6 +679,7 @@ _DISABLE_FLAGS = {
     'cros_license_check': _check_license,
     'tab_check': _check_no_tabs,
     'branch_check': _check_change_has_branch_field,
+    'signoff_check': _check_change_has_signoff_field,
 }
 
 

@@ -4,6 +4,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+"""Unittests for pre-upload.py."""
+
 from __future__ import print_function
 
 import mox
@@ -20,6 +22,8 @@ pre_upload = __import__('pre-upload')
 
 
 class TryUTF8DecodeTest(unittest.TestCase):
+  """Verify we sanely handle unicode content."""
+
   def runTest(self):
     self.assertEquals(u'', pre_upload._try_utf8_decode(''))
     self.assertEquals(u'abc', pre_upload._try_utf8_decode('abc'))
@@ -29,6 +33,8 @@ class TryUTF8DecodeTest(unittest.TestCase):
 
 
 class CheckNoLongLinesTest(unittest.TestCase):
+  """Tests for _check_no_long_lines."""
+
   def setUp(self):
     self.mocker = mox.Mox()
     self.mocker.StubOutWithMock(pre_upload, '_filter_files')
@@ -62,13 +68,17 @@ class CheckNoLongLinesTest(unittest.TestCase):
                        for line in [3, 4, 8]],
                       failure.items)
 
+
 class CheckKernelConfig(unittest.TestCase):
+  """Tests for _kernel_configcheck."""
+
+  def setUp(self):
+    self.mocker = mox.Mox()
+
   def tearDown(self):
     self.mocker.UnsetStubs()
 
   def runTest(self):
-    self.mocker = mox.Mox();
-
     # Mixed changes, should fail
     self.mocker.StubOutWithMock(pre_upload, '_get_affected_files')
     pre_upload._get_affected_files(mox.IgnoreArg()).AndReturn(

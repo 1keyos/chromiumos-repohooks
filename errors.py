@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+"""Common errors thrown when repo presubmit checks fail."""
+
 from __future__ import print_function
 
 import re
@@ -9,7 +11,7 @@ import sys
 
 
 class VerifyException(Exception):
-  pass
+  """Basic sanity checks failed."""
 
 
 class HookFailure(object):
@@ -21,6 +23,7 @@ class HookFailure(object):
 
 _INDENT = ' ' * 4
 _PROJECT_INFO = 'Errors in PROJECT *%s*!'
+
 
 def _PrintWithIndent(msg, indent_level):
   """Print a block of text with a specified indent level to stderr.

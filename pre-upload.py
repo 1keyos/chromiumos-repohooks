@@ -3,6 +3,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+"""Presubmit checks to run when doing `repo upload`.
+
+You can add new checks by adding a functions to the HOOKS constants.
+"""
+
 from __future__ import print_function
 
 import ConfigParser
@@ -29,37 +34,37 @@ from chromite.licensing import licenses
 
 
 COMMON_INCLUDED_PATHS = [
-  # C++ and friends
-  r".*\.c$", r".*\.cc$", r".*\.cpp$", r".*\.h$", r".*\.m$", r".*\.mm$",
-  r".*\.inl$", r".*\.asm$", r".*\.hxx$", r".*\.hpp$", r".*\.s$", r".*\.S$",
-  # Scripts
-  r".*\.js$", r".*\.py$", r".*\.sh$", r".*\.rb$", r".*\.pl$", r".*\.pm$",
-  # No extension at all, note that ALL CAPS files are black listed in
-  # COMMON_EXCLUDED_LIST below.
-  r"(^|.*[\\\/])[^.]+$",
-  # Other
-  r".*\.java$", r".*\.mk$", r".*\.am$",
+    # C++ and friends
+    r".*\.c$", r".*\.cc$", r".*\.cpp$", r".*\.h$", r".*\.m$", r".*\.mm$",
+    r".*\.inl$", r".*\.asm$", r".*\.hxx$", r".*\.hpp$", r".*\.s$", r".*\.S$",
+    # Scripts
+    r".*\.js$", r".*\.py$", r".*\.sh$", r".*\.rb$", r".*\.pl$", r".*\.pm$",
+    # No extension at all, note that ALL CAPS files are black listed in
+    # COMMON_EXCLUDED_LIST below.
+    r"(^|.*[\\\/])[^.]+$",
+    # Other
+    r".*\.java$", r".*\.mk$", r".*\.am$",
 ]
 
 
 COMMON_EXCLUDED_PATHS = [
-  # avoid doing source file checks for kernel
-  r"/src/third_party/kernel/",
-  r"/src/third_party/kernel-next/",
-  r"/src/third_party/ktop/",
-  r"/src/third_party/punybench/",
-  r".*\bexperimental[\\\/].*",
-  r".*\b[A-Z0-9_]{2,}$",
-  r".*[\\\/]debian[\\\/]rules$",
-  # for ebuild trees, ignore any caches and manifest data
-  r".*/Manifest$",
-  r".*/metadata/[^/]*cache[^/]*/[^/]+/[^/]+$",
+    # avoid doing source file checks for kernel
+    r"/src/third_party/kernel/",
+    r"/src/third_party/kernel-next/",
+    r"/src/third_party/ktop/",
+    r"/src/third_party/punybench/",
+    r".*\bexperimental[\\\/].*",
+    r".*\b[A-Z0-9_]{2,}$",
+    r".*[\\\/]debian[\\\/]rules$",
+    # for ebuild trees, ignore any caches and manifest data
+    r".*/Manifest$",
+    r".*/metadata/[^/]*cache[^/]*/[^/]+/[^/]+$",
 
-  # ignore profiles data (like overlay-tegra2/profiles)
-  r".*/overlay-.*/profiles/.*",
-  # ignore minified js and jquery
-  r".*\.min\.js",
-  r".*jquery.*\.js",
+    # ignore profiles data (like overlay-tegra2/profiles)
+    r".*/overlay-.*/profiles/.*",
+    # ignore minified js and jquery
+    r".*\.min\.js",
+    r".*jquery.*\.js",
 ]
 
 
@@ -116,12 +121,12 @@ def _match_regex_list(subject, expressions):
     Whether the passed in subject matches any of the passed in regexes.
   """
   for expr in expressions:
-    if (re.search(expr, subject)):
+    if re.search(expr, subject):
       return True
   return False
 
 
-def _filter_files(files, include_list, exclude_list=[]):
+def _filter_files(files, include_list, exclude_list=()):
   """Filter out files based on the conditions passed in.
 
   Args:
@@ -163,15 +168,18 @@ def _verify_header_content(commit, content, fail_msg):
                         COMMON_EXCLUDED_PATHS)
 
   for f in files:
-    if os.path.exists(f): # Ignore non-existant files
+    # Ignore non-existant files
+    if os.path.exists(f):
       contents = open(f).read()
-      if len(contents) == 0: continue  # Ignore empty files
+      if not contents:
+        # Ignore empty files
+        continue
       if not license_re.search(contents):
         bad_files.append(f)
   if bad_files:
-     msg = "%s:\n%s\n%s" % (fail_msg, license_re.pattern,
-                            "Found a bad header in these files:")
-     return HookFailure(msg, bad_files)
+    msg = "%s:\n%s\n%s" % (fail_msg, license_re.pattern,
+                           "Found a bad header in these files:")
+    return HookFailure(msg, bad_files)
 
 
 # Git Helpers
@@ -214,10 +222,10 @@ def _try_utf8_decode(data):
     return data
 
 
-def _get_file_diff(file, commit):
+def _get_file_diff(path, commit):
   """Returns a list of (linenum, lines) tuples that the commit touched."""
   output = _run_command(['git', 'show', '-p', '--pretty=format:',
-                         '--no-ext-diff', commit, file])
+                         '--no-ext-diff', commit, path])
 
   new_lines = []
   line_num = 0
@@ -248,7 +256,7 @@ def _get_affected_files(commit, include_deletes=False):
   for statusline in output.splitlines():
     m = re.match('^(\w)+\t(.+)$', statusline.rstrip())
     # Ignore deleted files, and return absolute paths of files
-    if (include_deletes or m.group(1)[0] != 'D'):
+    if include_deletes or m.group(1)[0] != 'D':
       pwd = os.getcwd()
       files.append(os.path.join(pwd, m.group(2)))
   return files
@@ -268,7 +276,7 @@ def _get_commit_desc(commit):
 # Common Hooks
 
 
-def _check_no_long_lines(project, commit):
+def _check_no_long_lines(_project, commit):
   """Checks that there aren't any lines longer than maxlen characters in any of
   the text files to be submitted.
   """
@@ -285,7 +293,7 @@ def _check_no_long_lines(project, commit):
   for afile in files:
     for line_num, line in _get_file_diff(afile, commit):
       # Allow certain lines to exceed the maxlen rule.
-      if (len(line) <= MAX_LEN or SKIP_REGEXP.search(line)):
+      if len(line) <= MAX_LEN or SKIP_REGEXP.search(line):
         continue
 
       errors.append('%s, line %s, %s chars' % (afile, line_num, len(line)))
@@ -297,12 +305,12 @@ def _check_no_long_lines(project, commit):
     return HookFailure(msg, errors)
 
 
-def _check_no_stray_whitespace(project, commit):
+def _check_no_stray_whitespace(_project, commit):
   """Checks that there is no stray whitespace at source lines end."""
   errors = []
   files = _filter_files(_get_affected_files(commit),
-                                COMMON_INCLUDED_PATHS,
-                                COMMON_EXCLUDED_PATHS)
+                        COMMON_INCLUDED_PATHS,
+                        COMMON_EXCLUDED_PATHS)
 
   for afile in files:
     for line_num, line in _get_file_diff(afile, commit):
@@ -312,7 +320,7 @@ def _check_no_stray_whitespace(project, commit):
       return HookFailure('Found line ending with white space in:', errors)
 
 
-def _check_no_tabs(project, commit):
+def _check_no_tabs(_project, commit):
   """Checks there are no unexpanded tabs."""
   TAB_OK_PATHS = [
       r"/src/third_party/u-boot/",
@@ -330,12 +338,12 @@ def _check_no_tabs(project, commit):
   for afile in files:
     for line_num, line in _get_file_diff(afile, commit):
       if '\t' in line:
-          errors.append('%s, line %s' % (afile, line_num))
+        errors.append('%s, line %s' % (afile, line_num))
   if errors:
     return HookFailure('Found a tab character in:', errors)
 
 
-def _check_change_has_test_field(project, commit):
+def _check_change_has_test_field(_project, commit):
   """Check for a non-empty 'TEST=' field in the commit message."""
   TEST_RE = r'\nTEST=\S+'
 
@@ -344,7 +352,7 @@ def _check_change_has_test_field(project, commit):
     return HookFailure(msg)
 
 
-def _check_change_has_valid_cq_depend(project, commit):
+def _check_change_has_valid_cq_depend(_project, commit):
   """Check for a correctly formatted CQ-DEPEND field in the commit message."""
   msg = 'Changelist has invalid CQ-DEPEND target.'
   example = 'Example: CQ-DEPEND=CL:1234, CL:2345'
@@ -354,7 +362,7 @@ def _check_change_has_valid_cq_depend(project, commit):
     return HookFailure(msg, [example, str(ex)])
 
 
-def _check_change_has_bug_field(project, commit):
+def _check_change_has_bug_field(_project, commit):
   """Check for a correctly formatted 'BUG=' field in the commit message."""
   OLD_BUG_RE = r'\nBUG=.*chromium-os'
   if re.search(OLD_BUG_RE, _get_commit_desc(commit)):
@@ -459,7 +467,7 @@ def _check_for_uprev(project, commit):
   return None
 
 
-def _check_keywords(project, commit):
+def _check_keywords(_project, commit):
   """Make sure we use the new style KEYWORDS when possible in ebuilds.
 
   If an ebuild generally does not care about the arch it is running on, then
@@ -528,7 +536,7 @@ def _check_ebuild_licenses(_project, commit):
         return HookFailure(e.message, [ebuild])
 
 
-def _check_change_has_proper_changeid(project, commit):
+def _check_change_has_proper_changeid(_project, commit):
   """Verify that Change-ID is present in last paragraph of commit message."""
   desc = _get_commit_desc(commit)
   loc = desc.rfind('\nChange-Id:')
@@ -536,7 +544,7 @@ def _check_change_has_proper_changeid(project, commit):
     return HookFailure('Change-Id must be in last paragraph of description.')
 
 
-def _check_license(project, commit):
+def _check_license(_project, commit):
   """Verifies the license header."""
   LICENSE_HEADER = (
      r".* Copyright \(c\) 20[-0-9]{2,7} The Chromium OS Authors\. All rights "
@@ -551,7 +559,7 @@ def _check_license(project, commit):
   return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
 
 
-def _check_google_copyright(project, commit):
+def _check_google_copyright(_project, commit):
   """Verifies Google Inc. as copyright holder."""
   LICENSE_HEADER = (
      r".* Copyright 20[-0-9]{2,7} Google Inc\."
@@ -569,10 +577,10 @@ def _check_google_copyright(project, commit):
 # Project-specific hooks
 
 
-def _run_checkpatch(project, commit, options=[]):
+def _run_checkpatch(_project, commit, options=()):
   """Runs checkpatch.pl on the given project"""
   hooks_dir = _get_hooks_dir()
-  cmd = ['%s/checkpatch.pl' % hooks_dir] + options + ['-']
+  cmd = ['%s/checkpatch.pl' % hooks_dir] + list(options) + ['-']
   p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
   output = p.communicate(_get_patch(commit))[0]
   if p.returncode:
@@ -582,19 +590,22 @@ def _run_checkpatch(project, commit, options=[]):
 def _run_checkpatch_no_tree(project, commit):
   return _run_checkpatch(project, commit, ['--no-tree'])
 
+
 def _run_checkpatch_ec(project, commit):
   """Runs checkpatch with options for Chromium EC projects."""
   return _run_checkpatch(project, commit, ['--no-tree',
                                            '--ignore=MSLEEP,VOLATILE'])
 
-def _kernel_configcheck(project, commit):
+
+def _kernel_configcheck(_project, commit):
   """Makes sure kernel config changes are not mixed with code changes"""
   files = _get_affected_files(commit)
   if not len(_filter_files(files, [r'chromeos/config'])) in [0, len(files)]:
     return HookFailure('Changes to chromeos/config/ and regular files must '
                        'be in separate commits:\n%s' % '\n'.join(files))
 
-def _run_json_check(project, commit):
+
+def _run_json_check(_project, commit):
   """Checks that all JSON files are syntactically valid."""
   for f in _filter_files(_get_affected_files(commit), [r'.*\.json']):
     try:
@@ -603,7 +614,7 @@ def _run_json_check(project, commit):
       return HookFailure('Invalid JSON in %s: %s' % (f, e))
 
 
-def _check_manifests(project, commit):
+def _check_manifests(_project, commit):
   """Make sure Manifest files only have DIST lines"""
   paths = []
 
@@ -624,7 +635,7 @@ def _check_manifests(project, commit):
                        ('\n'.join(paths),))
 
 
-def _check_change_has_branch_field(project, commit):
+def _check_change_has_branch_field(_project, commit):
   """Check for a non-empty 'BRANCH=' field in the commit message."""
   BRANCH_RE = r'\nBRANCH=\S+'
 
@@ -634,7 +645,7 @@ def _check_change_has_branch_field(project, commit):
     return HookFailure(msg)
 
 
-def _check_change_has_signoff_field(project, commit):
+def _check_change_has_signoff_field(_project, commit):
   """Check for a non-empty 'Signed-off-by:' field in the commit message."""
   SIGNOFF_RE = r'\nSigned-off-by: \S+'
 
@@ -753,7 +764,8 @@ def _get_disabled_hooks(config):
   disable_flags = []
   for flag in config.options(SECTION):
     try:
-      if not config.getboolean(SECTION, flag): disable_flags.append(flag)
+      if not config.getboolean(SECTION, flag):
+        disable_flags.append(flag)
     except ValueError as e:
       msg = "Error parsing flag \'%s\' in %s file - " % (flag, _CONFIG_FILE)
       print(msg + str(e))
@@ -856,10 +868,11 @@ def _run_project_hooks(project, proj_dir=None, commit_list=None):
   os.chdir(pwd)
   return error_found
 
+
 # Main
 
 
-def main(project_list, worktree_list=None, **kwargs):
+def main(project_list, worktree_list=None, **_kwargs):
   """Main function invoked directly by repo.
 
   This function will exit directly upon error so that repo doesn't print some
@@ -880,7 +893,7 @@ def main(project_list, worktree_list=None, **kwargs):
     if _run_project_hooks(project, proj_dir=worktree):
       found_error = True
 
-  if (found_error):
+  if found_error:
     msg = ('Preupload failed due to errors in project(s). HINTS:\n'
            '- To disable some source style checks, and for other hints, see '
            '<checkout_dir>/src/repohooks/README\n'
@@ -956,6 +969,7 @@ def direct_main(args, verbose=False):
 
   Args:
     args: The value of sys.argv
+    verbose: Log verbose info while running
 
   Returns:
     0 if no pre-upload failures, 1 if failures.

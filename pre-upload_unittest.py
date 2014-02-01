@@ -12,6 +12,8 @@ import mox
 import os
 import sys
 
+import errors
+
 # pylint: disable=W0212
 # We access private members of the pre_upload module all over the place.
 
@@ -104,6 +106,105 @@ class CheckKernelConfig(cros_test_lib.MoxTestCase):
     self.mox.ReplayAll()
     failure = pre_upload._kernel_configcheck('PROJECT', 'COMMIT')
     self.assertFalse(failure)
+
+
+class CheckEbuildEapi(cros_test_lib.MockTestCase):
+  """Tests for _check_ebuild_eapi."""
+
+  PORTAGE_STABLE = 'chromiumos/overlays/portage-stable'
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+    self.content_mock = self.PatchObject(pre_upload, '_get_file_content')
+    self.diff_mock = self.PatchObject(pre_upload, '_get_file_diff',
+                                      side_effect=Exception())
+
+  def testSkipUpstreamOverlays(self):
+    """Skip ebuilds found in upstream overlays."""
+    self.file_mock.side_effect = Exception()
+    ret = pre_upload._check_ebuild_eapi(self.PORTAGE_STABLE, 'HEAD')
+    self.assertEqual(ret, None)
+
+    # Make sure our condition above triggers.
+    self.assertRaises(Exception, pre_upload._check_ebuild_eapi, 'o', 'HEAD')
+
+  def testSkipNonEbuilds(self):
+    """Skip non-ebuild files."""
+    self.content_mock.side_effect = Exception()
+
+    self.file_mock.return_value = ['some-file', 'ebuild/dir', 'an.ebuild~']
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertEqual(ret, None)
+
+    # Make sure our condition above triggers.
+    self.file_mock.return_value.append('a/real.ebuild')
+    self.assertRaises(Exception, pre_upload._check_ebuild_eapi, 'o', 'HEAD')
+
+  def testSkipSymlink(self):
+    """Skip files that are just symlinks."""
+    self.file_mock.return_value = ['a-r1.ebuild']
+    self.content_mock.return_value = 'a.ebuild'
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertEqual(ret, None)
+
+  def testRejectEapiImplicit0Content(self):
+    """Reject ebuilds that do not declare EAPI (so it's 0)."""
+    self.file_mock.return_value = ['a.ebuild']
+
+    self.content_mock.return_value = """# Header
+IUSE="foo"
+src_compile() { }
+"""
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+  def testRejectExplicitEapi1Content(self):
+    """Reject ebuilds that do declare old EAPI explicitly."""
+    self.file_mock.return_value = ['a.ebuild']
+
+    template = """# Header
+EAPI=%s
+IUSE="foo"
+src_compile() { }
+"""
+    # Make sure we only check the first EAPI= setting.
+    self.content_mock.return_value = template % '1\nEAPI=4'
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+    # Verify we handle double quotes too.
+    self.content_mock.return_value = template % '"1"'
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+    # Verify we handle single quotes too.
+    self.content_mock.return_value = template % "'1'"
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+  def testAcceptExplicitEapi4Content(self):
+    """Accept ebuilds that do declare new EAPI explicitly."""
+    self.file_mock.return_value = ['a.ebuild']
+
+    template = """# Header
+EAPI=%s
+IUSE="foo"
+src_compile() { }
+"""
+    # Make sure we only check the first EAPI= setting.
+    self.content_mock.return_value = template % '4\nEAPI=1'
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertEqual(ret, None)
+
+    # Verify we handle double quotes too.
+    self.content_mock.return_value = template % '"5"'
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertEqual(ret, None)
+
+    # Verify we handle single quotes too.
+    self.content_mock.return_value = template % "'5-hdepend'"
+    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    self.assertEqual(ret, None)
 
 
 if __name__ == '__main__':

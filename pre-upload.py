@@ -222,6 +222,19 @@ def _try_utf8_decode(data):
     return data
 
 
+def _get_file_content(path, commit):
+  """Returns the content of a file at a specific commit.
+
+  We can't rely on the file as it exists in the filesystem as people might be
+  uploading a series of changes which modifies the file multiple times.
+
+  Note: The "content" of a symlink is just the target.  So if you're expecting
+  a full file, you should check that first.  One way to detect is that the
+  content will not have any newlines.
+  """
+  return _run_command(['git', 'show', '%s:%s' % (commit, path)])
+
+
 def _get_file_diff(path, commit):
   """Returns a list of (linenum, lines) tuples that the commit touched."""
   output = _run_command(['git', 'show', '-p', '--pretty=format:',
@@ -241,12 +254,13 @@ def _get_file_diff(path, commit):
   return new_lines
 
 
-def _get_affected_files(commit, include_deletes=False):
+def _get_affected_files(commit, include_deletes=False, relative=False):
   """Returns list of absolute filepaths that were modified/added.
 
   Args:
     commit: The commit
     include_deletes: If true we'll include delete in the list.
+    relative: Whether to return full paths to files.
 
   Returns:
     A list of modified/added (and perhaps deleted) files
@@ -257,8 +271,11 @@ def _get_affected_files(commit, include_deletes=False):
     m = re.match('^(\w)+\t(.+)$', statusline.rstrip())
     # Ignore deleted files, and return absolute paths of files
     if include_deletes or m.group(1)[0] != 'D':
-      pwd = os.getcwd()
-      files.append(os.path.join(pwd, m.group(2)))
+      f = m.group(2)
+      if not relative:
+        pwd = os.getcwd()
+        f = os.path.join(pwd, f)
+      files.append(f)
   return files
 
 
@@ -465,6 +482,70 @@ def _check_for_uprev(project, commit):
                          'or a -r1.ebuild symlink if this is a new ebuild')
 
   return None
+
+
+def _check_ebuild_eapi(project, commit):
+  """Make sure we have people use EAPI=4 or newer with custom ebuilds.
+
+  We want to get away from older EAPI's as it makes life confusing and they
+  have less builtin error checking.
+
+  Args:
+    project: The project to look at
+    commit: The commit to look at
+
+  Returns:
+    A HookFailure or None.
+  """
+  # If this is the portage-stable overlay, then ignore the check.  It's rare
+  # that we're doing anything other than importing files from upstream, so
+  # forcing a rev bump makes no sense.
+  whitelist = (
+      'chromiumos/overlays/portage-stable',
+  )
+  if project in whitelist:
+    return None
+
+  BAD_EAPIS = ('0', '1', '2', '3')
+
+  get_eapi = re.compile(r'^\s*EAPI=[\'"]?([^\'"]+)')
+
+  ebuilds_re = [r'\.ebuild$']
+  ebuilds = _filter_files(_get_affected_files(commit, relative=True),
+                          ebuilds_re)
+  bad_ebuilds = []
+
+  for ebuild in ebuilds:
+    # If the ebuild does not specify an EAPI, it defaults to 0.
+    eapi = '0'
+
+    lines = _get_file_content(ebuild, commit).splitlines()
+    if len(lines) == 1:
+      # This is most likely a symlink, so skip it entirely.
+      continue
+
+    for line in lines:
+      m = get_eapi.match(line)
+      if m:
+        # Once we hit the first EAPI line in this ebuild, stop processing.
+        # The spec requires that there only be one and it be first, so
+        # checking all possible values is pointless.  We also assume that
+        # it's "the" EAPI line and not something in the middle of a heredoc.
+        eapi = m.group(1)
+        break
+
+    if eapi in BAD_EAPIS:
+      bad_ebuilds.append((ebuild, eapi))
+
+  if bad_ebuilds:
+    # pylint: disable=C0301
+    url = 'http://dev.chromium.org/chromium-os/how-tos-and-troubleshooting/upgrade-ebuild-eapis'
+    # pylint: enable=C0301
+    return HookFailure(
+        'These ebuilds are using old EAPIs.  Please update to 4 or newer.\n'
+        '\t%s\n'
+        'See this guide for more details:\n%s\n' %
+        ('\n\t'.join(['%s: EAPI=%s' % x for x in bad_ebuilds]), url))
 
 
 def _check_keywords(_project, commit):
@@ -696,6 +777,7 @@ _COMMON_HOOKS = [
     _check_change_has_valid_cq_depend,
     _check_change_has_test_field,
     _check_change_has_proper_changeid,
+    _check_ebuild_eapi,
     _check_ebuild_licenses,
     _check_no_stray_whitespace,
     _check_no_long_lines,

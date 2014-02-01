@@ -216,7 +216,8 @@ def _try_utf8_decode(data):
 
 def _get_file_diff(file, commit):
   """Returns a list of (linenum, lines) tuples that the commit touched."""
-  output = _run_command(['git', 'show', '-p', '--no-ext-diff', commit, file])
+  output = _run_command(['git', 'show', '-p', '--pretty=format:',
+                         '--no-ext-diff', commit, file])
 
   new_lines = []
   line_num = 0

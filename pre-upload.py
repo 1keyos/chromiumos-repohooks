@@ -548,7 +548,7 @@ def _check_ebuild_eapi(project, commit):
         ('\n\t'.join(['%s: EAPI=%s' % x for x in bad_ebuilds]), url))
 
 
-def _check_keywords(_project, commit):
+def _check_ebuild_keywords(_project, commit):
   """Make sure we use the new style KEYWORDS when possible in ebuilds.
 
   If an ebuild generally does not care about the arch it is running on, then
@@ -568,7 +568,10 @@ def _check_keywords(_project, commit):
 
   get_keywords = re.compile(r'^\s*KEYWORDS="(.*)"')
 
-  ebuilds = [x for x in _get_affected_files(commit) if x.endswith('.ebuild')]
+  ebuilds_re = [r'\.ebuild$']
+  ebuilds = _filter_files(_get_affected_files(commit, relative=True),
+                          ebuilds_re)
+
   for ebuild in ebuilds:
     for _, line in _get_file_diff(ebuild, commit):
       m = get_keywords.match(line)
@@ -836,6 +839,7 @@ _COMMON_HOOKS = [
     _check_change_has_test_field,
     _check_change_has_proper_changeid,
     _check_ebuild_eapi,
+    _check_ebuild_keywords,
     _check_ebuild_licenses,
     _check_ebuild_virtual_pv,
     _check_no_stray_whitespace,
@@ -843,7 +847,6 @@ _COMMON_HOOKS = [
     _check_license,
     _check_no_tabs,
     _check_for_uprev,
-    _check_keywords,
 ]
 
 

@@ -207,5 +207,80 @@ src_compile() { }
     self.assertEqual(ret, None)
 
 
+class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
+  """Tests for _check_ebuild_virtual_pv."""
+
+  PORTAGE_STABLE = 'chromiumos/overlays/portage-stable'
+  CHROMIUMOS_OVERLAY = 'chromiumos/overlays/chromiumos'
+  BOARD_OVERLAY = 'chromiumos/overlays/board-overlays'
+  PRIVATE_OVERLAY = 'chromeos/overlays/overlay-link-private'
+  PRIVATE_VARIANT_OVERLAY = ('chromeos/overlays/'
+                             'overlay-variant-daisy-spring-private')
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+
+  def testNoVirtuals(self):
+    """Skip non virtual packages."""
+    self.file_mock.return_value = ['some/package/package-3.ebuild']
+    ret = pre_upload._check_ebuild_virtual_pv('overlay', 'H')
+    self.assertEqual(ret, None)
+
+  def testCommonVirtuals(self):
+    """Non-board overlays should use PV=1."""
+    template = 'virtual/foo/foo-%s.ebuild'
+    self.file_mock.return_value = [template % '1']
+    ret = pre_upload._check_ebuild_virtual_pv(self.CHROMIUMOS_OVERLAY, 'H')
+    self.assertEqual(ret, None)
+
+    self.file_mock.return_value = [template % '2']
+    ret = pre_upload._check_ebuild_virtual_pv(self.CHROMIUMOS_OVERLAY, 'H')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+  def testPublicBoardVirtuals(self):
+    """Public board overlays should use PV=2."""
+    template = 'overlay-lumpy/virtual/foo/foo-%s.ebuild'
+    self.file_mock.return_value = [template % '2']
+    ret = pre_upload._check_ebuild_virtual_pv(self.BOARD_OVERLAY, 'H')
+    self.assertEqual(ret, None)
+
+    self.file_mock.return_value = [template % '2.5']
+    ret = pre_upload._check_ebuild_virtual_pv(self.BOARD_OVERLAY, 'H')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+  def testPublicBoardVariantVirtuals(self):
+    """Public board variant overlays should use PV=2.5."""
+    template = 'overlay-variant-lumpy-foo/virtual/foo/foo-%s.ebuild'
+    self.file_mock.return_value = [template % '2.5']
+    ret = pre_upload._check_ebuild_virtual_pv(self.BOARD_OVERLAY, 'H')
+    self.assertEqual(ret, None)
+
+    self.file_mock.return_value = [template % '3']
+    ret = pre_upload._check_ebuild_virtual_pv(self.BOARD_OVERLAY, 'H')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+  def testPrivateBoardVirtuals(self):
+    """Private board overlays should use PV=3."""
+    template = 'virtual/foo/foo-%s.ebuild'
+    self.file_mock.return_value = [template % '3']
+    ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_OVERLAY, 'H')
+    self.assertEqual(ret, None)
+
+    self.file_mock.return_value = [template % '3.5']
+    ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_OVERLAY, 'H')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+  def testPrivateBoardVariantVirtuals(self):
+    """Private board variant overlays should use PV=3.5."""
+    template = 'virtual/foo/foo-%s.ebuild'
+    self.file_mock.return_value = [template % '3.5']
+    ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_VARIANT_OVERLAY, 'H')
+    self.assertEqual(ret, None)
+
+    self.file_mock.return_value = [template % '4']
+    ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_VARIANT_OVERLAY, 'H')
+    self.assertTrue(isinstance (ret, errors.HookFailure))
+
+
 if __name__ == '__main__':
   cros_test_lib.main()

@@ -617,6 +617,64 @@ def _check_ebuild_licenses(_project, commit):
         return HookFailure(e.message, [ebuild])
 
 
+def _check_ebuild_virtual_pv(project, commit):
+  """Enforce the virtual PV policies."""
+  # If this is the portage-stable overlay, then ignore the check.
+  # We want to import virtuals as-is from upstream Gentoo.
+  whitelist = (
+      'chromiumos/overlays/portage-stable',
+  )
+  if project in whitelist:
+    return None
+
+  # We assume the repo name is the same as the dir name on disk.
+  # It would be dumb to not have them match though.
+  project = os.path.basename(project)
+
+  is_variant = lambda x: x.startswith('overlay-variant-')
+  is_board = lambda x: x.startswith('overlay-')
+  is_private = lambda x: x.endswith('-private')
+
+  get_pv = re.compile(r'(.*?)virtual/([^/]+)/\2-([^/]*)\.ebuild$')
+
+  ebuilds_re = [r'\.ebuild$']
+  ebuilds = _filter_files(_get_affected_files(commit, relative=True),
+                          ebuilds_re)
+  bad_ebuilds = []
+
+  for ebuild in ebuilds:
+    m = get_pv.match(ebuild)
+    if m:
+      overlay = m.group(1)
+      if not overlay or not is_board(overlay):
+        overlay = project
+
+      pv = m.group(3).split('-', 1)[0]
+
+      if is_private(overlay):
+        want_pv = '3.5' if is_variant(overlay) else '3'
+      elif is_board(overlay):
+        want_pv = '2.5' if is_variant(overlay) else '2'
+      else:
+        want_pv = '1'
+
+      if pv != want_pv:
+        bad_ebuilds.append((ebuild, pv, want_pv))
+
+  if bad_ebuilds:
+    # pylint: disable=C0301
+    url = 'http://dev.chromium.org/chromium-os/how-tos-and-troubleshooting/portage-build-faq#TOC-Virtuals-and-central-management'
+    # pylint: enable=C0301
+    return HookFailure(
+        'These virtuals have incorrect package versions (PVs). Please adjust:\n'
+        '\t%s\n'
+        'If this is an upstream Gentoo virtual, then you may ignore this\n'
+        'check (and re-run w/--no-verify). Otherwise, please see this\n'
+        'page for more details:\n%s\n' %
+        ('\n\t'.join(['%s:\n\t\tPV is %s but should be %s' % x
+                      for x in bad_ebuilds]), url))
+
+
 def _check_change_has_proper_changeid(_project, commit):
   """Verify that Change-ID is present in last paragraph of commit message."""
   desc = _get_commit_desc(commit)
@@ -779,6 +837,7 @@ _COMMON_HOOKS = [
     _check_change_has_proper_changeid,
     _check_ebuild_eapi,
     _check_ebuild_licenses,
+    _check_ebuild_virtual_pv,
     _check_no_stray_whitespace,
     _check_no_long_lines,
     _check_license,

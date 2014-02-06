@@ -498,8 +498,8 @@ def _check_ebuild_eapi(project, commit):
     A HookFailure or None.
   """
   # If this is the portage-stable overlay, then ignore the check.  It's rare
-  # that we're doing anything other than importing files from upstream, so
-  # forcing a rev bump makes no sense.
+  # that we're doing anything other than importing files from upstream, and
+  # we shouldn't be rewriting things fundamentally anyways.
   whitelist = (
       'chromiumos/overlays/portage-stable',
   )
@@ -542,7 +542,9 @@ def _check_ebuild_eapi(project, commit):
     url = 'http://dev.chromium.org/chromium-os/how-tos-and-troubleshooting/upgrade-ebuild-eapis'
     # pylint: enable=C0301
     return HookFailure(
-        'These ebuilds are using old EAPIs.  Please update to 4 or newer.\n'
+        'These ebuilds are using old EAPIs.  If these are imported from\n'
+        'Gentoo, then you may ignore and upload once with the --no-verify\n'
+        'flag.  Otherwise, please update to 4 or newer.\n'
         '\t%s\n'
         'See this guide for more details:\n%s\n' %
         ('\n\t'.join(['%s: EAPI=%s' % x for x in bad_ebuilds]), url))

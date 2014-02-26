@@ -168,8 +168,8 @@ def _verify_header_content(commit, content, fail_msg):
                         COMMON_EXCLUDED_PATHS)
 
   for f in files:
-    # Ignore non-existant files
-    if os.path.exists(f):
+    # Ignore non-existant files and symlinks
+    if os.path.exists(f) and not os.path.islink(f):
       contents = open(f).read()
       if not contents:
         # Ignore empty files

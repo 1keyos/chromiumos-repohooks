@@ -691,12 +691,12 @@ def _check_change_has_proper_changeid(_project, commit):
 def _check_license(_project, commit):
   """Verifies the license header."""
   LICENSE_HEADER = (
-     r".* Copyright \(c\) 20[-0-9]{2,7} The Chromium OS Authors\. All rights "
-       r"reserved\." "\n"
-     r".* Use of this source code is governed by a BSD-style license that can "
-       "be\n"
-     r".* found in the LICENSE file\."
-       "\n"
+      r".* Copyright( \(c\))? 20[-0-9]{2,7} The Chromium OS Authors\. "
+          "All rights reserved\." "\n"
+      r".* Use of this source code is governed by a BSD-style license that can "
+          "be\n"
+      r".* found in the LICENSE file\."
+          "\n"
   )
   FAIL_MSG = "License must match"
 

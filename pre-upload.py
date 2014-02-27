@@ -601,7 +601,7 @@ def _check_ebuild_licenses(_project, commit):
   touched_ebuilds = [x for x in affected_paths if x.endswith('.ebuild')]
 
   # A list of licenses to ignore for now.
-  LICENSES_IGNORE = ['||', '(', ')', 'Proprietary', 'as-is']
+  LICENSES_IGNORE = ['||', '(', ')', 'Proprietary']
 
   for ebuild in touched_ebuilds:
     # Skip virutal packages.

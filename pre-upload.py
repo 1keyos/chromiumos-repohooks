@@ -65,6 +65,9 @@ COMMON_EXCLUDED_PATHS = [
     # ignore minified js and jquery
     r".*\.min\.js",
     r".*jquery.*\.js",
+
+    # Ignore license files as the content is often taken verbatim.
+    r'.*/licenses/.*',
 ]
 
 
@@ -158,8 +161,8 @@ def _verify_header_content(commit, content, fail_msg):
     content: the content of the header to be verified.
     fail_msg: the first message to display in case of failure.
 
-    Returns:
-      The return value of HookFailure().
+  Returns:
+    The return value of HookFailure().
   """
   license_re = re.compile(content, re.MULTILINE)
   bad_files = []

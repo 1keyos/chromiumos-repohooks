@@ -16,7 +16,6 @@ import json
 import optparse
 import os
 import re
-import socket
 import sys
 import subprocess
 
@@ -706,21 +705,6 @@ def _check_license(_project, commit):
   return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
 
 
-def _check_google_copyright(_project, commit):
-  """Verifies Google Inc. as copyright holder."""
-  LICENSE_HEADER = (
-     r".* Copyright 20[-0-9]{2,7} Google Inc\."
-  )
-  FAIL_MSG = "Copyright must match"
-
-  # Avoid blocking partners and external contributors.
-  fqdn = socket.getfqdn()
-  if not fqdn.endswith(".corp.google.com"):
-    return None
-
-  return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
-
-
 # Project-specific hooks
 
 
@@ -875,8 +859,7 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/platform/mosys": [_check_change_has_branch_field],
     "chromiumos/platform/vboot_reference": [_check_change_has_branch_field],
     "chromiumos/third_party/coreboot": [_check_change_has_branch_field,
-                                        _check_change_has_signoff_field,
-                                        _check_google_copyright],
+                                        _check_change_has_signoff_field],
     "chromiumos/third_party/flashrom": [_check_change_has_branch_field],
     "chromiumos/third_party/kernel": [_run_checkpatch, _kernel_configcheck],
     "chromiumos/third_party/kernel-next": [_run_checkpatch,

@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+from __future__ import print_function
+
 import re
 import sys
 
@@ -30,7 +32,7 @@ def _PrintWithIndent(msg, indent_level):
   """
   regex = re.compile(r'^', re.M)
   msg = regex.sub(_INDENT * indent_level, msg)
-  print >> sys.stderr, msg
+  print(msg, file=sys.stderr)
 
 
 def _FormatCommitDesc(desc):
@@ -57,7 +59,7 @@ def PrintErrorForProject(project, error):
   """
   _PrintWithIndent(_PROJECT_INFO % project, 0)
   _PrintWithIndent(_FormatHookFailure(error), 1)
-  print >> sys.stderr, ''
+  print('', file=sys.stderr)
 
 
 def PrintErrorsForCommit(project, commit, commit_desc, error_list):
@@ -98,5 +100,4 @@ def PrintErrorsForCommit(project, commit, commit_desc, error_list):
   for error in error_list:
     _PrintWithIndent(_FormatHookFailure(error), 3)
 
-  print >> sys.stderr, ''
-
+  print('', file=sys.stderr)

@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+from __future__ import print_function
+
 import ConfigParser
 import json
 import os
@@ -382,7 +384,7 @@ def _get_disabled_hooks():
       if not config.getboolean(SECTION, flag): disable_flags.append(flag)
     except ValueError as e:
       msg = "Error parsing flag \'%s\' in %s file - " % (flag, _CONFIG_FILE)
-      print msg + str(e)
+      print(msg + str(e))
 
   disabled_keys = set(_DISABLE_FLAGS.iterkeys()).intersection(disable_flags)
   return set([_DISABLE_FLAGS[key] for key in disabled_keys])
@@ -454,7 +456,7 @@ def main(project_list, **kwargs):
            '- To disable some source style checks, and for other hints, see '
            '<checkout_dir>/src/repohooks/README\n'
            '- To upload only current project, run \'repo upload .\'')
-    print >> sys.stderr, msg
+    print(msg, file=sys.stderr)
     sys.exit(1)
 
 

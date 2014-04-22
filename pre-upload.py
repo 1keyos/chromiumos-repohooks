@@ -858,14 +858,12 @@ _PROJECT_SPECIFIC_HOOKS = {
                                _check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],
     "chromiumos/platform/vboot_reference": [_check_change_has_branch_field],
-    "chromiumos/third_party/coreboot": [_check_change_has_branch_field,
-                                        _check_change_has_signoff_field],
+    "chromiumos/third_party/coreboot": [_check_change_has_signoff_field],
     "chromiumos/third_party/flashrom": [_check_change_has_branch_field],
     "chromiumos/third_party/kernel": [_run_checkpatch, _kernel_configcheck],
     "chromiumos/third_party/kernel-next": [_run_checkpatch,
                                            _kernel_configcheck],
-    "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree,
-                                      _check_change_has_branch_field],
+    "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree],
 }
 
 

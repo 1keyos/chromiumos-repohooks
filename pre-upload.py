@@ -876,6 +876,8 @@ _DISABLE_FLAGS = {
     'tab_check': _check_no_tabs,
     'branch_check': _check_change_has_branch_field,
     'signoff_check': _check_change_has_signoff_field,
+    'bug_field_check': _check_change_has_bug_field,
+    'test_field_check': _check_change_has_test_field,
 }
 
 

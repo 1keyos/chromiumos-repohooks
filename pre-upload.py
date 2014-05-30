@@ -818,6 +818,12 @@ def _run_project_hook_script(script, project, commit):
                         ':\n' + stdout if stdout else ''))
 
 
+def _moved_to_platform2(project, _commit):
+  """Forbids commits to legacy repo in src/platform."""
+  return HookFailure('%s has been moved to platform2. This change should be '
+                     'made there.' % project)
+
+
 # Base
 
 
@@ -854,6 +860,9 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/overlays/board-overlays": [_check_manifests],
     "chromiumos/overlays/chromiumos-overlay": [_check_manifests],
     "chromiumos/overlays/portage-stable": [_check_manifests],
+    # TODO(bsimonnet): remove this check once src/platform/common-mk has been
+    # removed from the manifest (crbug.com/379236).
+    "chromiumos/platform/common-mk": [_moved_to_platform2],
     "chromiumos/platform/ec": [_run_checkpatch_ec,
                                _check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],
@@ -1188,7 +1197,7 @@ if __name__ == '__main__':
     prog_name = os.path.basename(sys.argv[0])
     try:
       exit_code = direct_main(sys.argv)
-    except BadInvocation, e:
-      print("%s: %s" % (prog_name, str(e)), file=sys.stderr)
+    except BadInvocation, err:
+      print("%s: %s" % (prog_name, str(err)), file=sys.stderr)
       exit_code = 1
   sys.exit(exit_code)

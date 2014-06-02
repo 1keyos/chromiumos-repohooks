@@ -863,6 +863,9 @@ _PROJECT_SPECIFIC_HOOKS = {
     # TODO(bsimonnet): remove this check once src/platform/common-mk has been
     # removed from the manifest (crbug.com/379236).
     "chromiumos/platform/common-mk": [_moved_to_platform2],
+    # TODO(bsimonnet): remove this check once src/platform/libchromeos has been
+    # removed from the manifest (crbug.com/379939)
+    "chromiumos/platform/libchromeos": [_moved_to_platform2],
     "chromiumos/platform/ec": [_run_checkpatch_ec,
                                _check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],

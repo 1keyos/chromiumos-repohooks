@@ -281,6 +281,28 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
     ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_VARIANT_OVERLAY, 'H')
     self.assertTrue(isinstance (ret, errors.HookFailure))
 
+class CheckGitOutputParsing(cros_test_lib.MockTestCase):
+  """Tests for git output parsing."""
+  def testParseAffectedFiles(self):
+    """Test parsing git diff --raw output."""
+    # Sample from git diff --raw.
+    sample_git_output = '\n'.join([
+        ":100644 100644 ff03961... a198e8b... M\tMakefile",
+        ":100644 000000 e69de29... 0000000... D\tP1/P2",
+        ":100755 100644 454d5ef... 0000000... C86\tP3\tP4",
+        ":100755 100644 454d5ef... 0000000... R86\tP5\tP6/P7",
+        ":100755 120644 454d5ef... 0000000... M\tIsASymlink",
+    ])
+    expected_modified_files_no_deletes = ['Makefile', 'P4', 'P6/P7']
+    expected_modified_files_with_deletes = ['Makefile', 'P1/P2', 'P4', 'P6/P7']
+    result = pre_upload._parse_affected_files(sample_git_output,
+                                              include_deletes=True,
+                                              relative=True)
+    self.assertEqual(result, expected_modified_files_with_deletes)
+    result = pre_upload._parse_affected_files(sample_git_output,
+                                              include_deletes=False,
+                                              relative=True)
+    self.assertEqual(result, expected_modified_files_no_deletes)
 
 if __name__ == '__main__':
   cros_test_lib.main()

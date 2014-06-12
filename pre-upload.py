@@ -18,6 +18,7 @@ import os
 import re
 import sys
 import subprocess
+import stat
 
 from errors import (VerifyException, HookFailure, PrintErrorForProject,
                     PrintErrorsForCommit)
@@ -256,29 +257,58 @@ def _get_file_diff(path, commit):
   return new_lines
 
 
-def _get_affected_files(commit, include_deletes=False, relative=False):
-  """Returns list of absolute filepaths that were modified/added.
+def _parse_affected_files(output, include_deletes=False, relative=False):
+  """Parses git diff's 'raw' format, returning a list of modified file paths.
+
+  This excludes directories and symlinks, and optionally includes files that
+  were deleted.
 
   Args:
-    commit: The commit
-    include_deletes: If true we'll include delete in the list.
-    relative: Whether to return full paths to files.
+    output: The result of the 'git diff --raw' command
+    include_deletes: If true, we'll include deleted files in the result
+    relative: Whether to return relative or full paths to files
 
   Returns:
     A list of modified/added (and perhaps deleted) files
   """
-  output = _run_command(['git', 'diff', '--name-status', commit + '^!'])
   files = []
+  # See the documentation for 'git diff --raw' for the relevant format.
   for statusline in output.splitlines():
-    m = re.match('^(\w)+\t(.+)$', statusline.rstrip())
-    # Ignore deleted files, and return absolute paths of files
-    if include_deletes or m.group(1)[0] != 'D':
-      f = m.group(2)
+    attributes, paths = statusline.split('\t', 1)
+    _, mode, _, _, status = attributes.split(' ')
+
+    # Ignore symlinks and directories.
+    imode = int(mode, 8)
+    if stat.S_ISDIR(imode) or stat.S_ISLNK(imode):
+      continue
+
+    # Ignore deleted files, and optionally return absolute paths of files.
+    if include_deletes or status != 'D':
+      # If a file was merely modified, we will have a single file path.
+      # If it was moved, we will have two paths (source and destination).
+      # In either case, we want the last path.
+      f = paths.split('\t')[-1]
       if not relative:
         pwd = os.getcwd()
         f = os.path.join(pwd, f)
       files.append(f)
+
   return files
+
+
+def _get_affected_files(commit, include_deletes=False, relative=False):
+  """Returns list of file paths that were modified/added, excluding symlinks.
+
+  Args:
+    commit: The commit
+    include_deletes: If true, we'll include deleted files in the result
+    relative: Whether to return relative or full paths to files
+
+  Returns:
+    A list of modified/added (and perhaps deleted) files
+  """
+  output = _run_command(['git', 'diff', '--raw', commit + '^!'])
+  return _parse_affected_files(output, include_deletes, relative)
 
 
 def _get_commits():
@@ -330,7 +360,6 @@ def _check_no_stray_whitespace(_project, commit):
   files = _filter_files(_get_affected_files(commit),
                         COMMON_INCLUDED_PATHS,
                         COMMON_EXCLUDED_PATHS)
-
   for afile in files:
     for line_num, line in _get_file_diff(afile, commit):
       if line.rstrip() != line:

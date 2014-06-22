@@ -885,7 +885,6 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromeos/third_party/intel-framework": [_check_change_has_branch_field],
     "chromeos/vendor/kernel-exynos-staging": [_run_checkpatch,
                                               _kernel_configcheck],
-    "chromeos/vendor/u-boot-exynos": [_run_checkpatch_no_tree],
     "chromiumos/overlays/board-overlays": [_check_manifests],
     "chromiumos/overlays/chromiumos-overlay": [_check_manifests],
     "chromiumos/overlays/portage-stable": [_check_manifests],

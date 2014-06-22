@@ -757,6 +757,13 @@ def _run_checkpatch_ec(project, commit):
                                            '--ignore=MSLEEP,VOLATILE'])
 
 
+def _run_checkpatch_depthcharge(project, commit):
+  """Runs checkpatch with options for depthcharge."""
+  return _run_checkpatch(project, commit, [
+      '--no-tree',
+      '--ignore=CAMELCASE,C99_COMMENTS,NEW_TYPEDEFS,CONFIG_DESCRIPTION'])
+
+
 def _kernel_configcheck(_project, commit):
   """Makes sure kernel config changes are not mixed with code changes"""
   files = _get_affected_files(commit)
@@ -893,6 +900,7 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/platform/common-mk": [_moved_to_platform2],
     # TODO(bsimonnet): remove this check once src/platform/libchromeos has been
     # removed from the manifest (crbug.com/379939)
+    "chromiumos/platform/depthcharge": [_run_checkpatch_depthcharge],
     "chromiumos/platform/libchromeos": [_moved_to_platform2],
     "chromiumos/platform/ec": [_run_checkpatch_ec,
                                _check_change_has_branch_field],

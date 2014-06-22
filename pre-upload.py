@@ -32,6 +32,7 @@ if __name__ in ('__builtin__', '__main__'):
 from chromite.lib import patch
 from chromite.licensing import licenses
 
+PRE_SUBMIT = 'pre-submit'
 
 COMMON_INCLUDED_PATHS = [
     # C++ and friends
@@ -210,7 +211,10 @@ def _get_upstream_branch():
 
 def _get_patch(commit):
   """Returns the patch for this commit."""
-  return _run_command(['git', 'format-patch', '--stdout', '-1', commit])
+  if commit == PRE_SUBMIT:
+    return _run_command(['git', 'diff', '--cached', 'HEAD'])
+  else:
+    return _run_command(['git', 'format-patch', '--stdout', '-1', commit])
 
 
 def _try_utf8_decode(data):
@@ -235,13 +239,20 @@ def _get_file_content(path, commit):
   a full file, you should check that first.  One way to detect is that the
   content will not have any newlines.
   """
-  return _run_command(['git', 'show', '%s:%s' % (commit, path)])
+  if commit == PRE_SUBMIT:
+    return _run_command(['git', 'diff', 'HEAD', path])
+  else:
+    return _run_command(['git', 'show', '%s:%s' % (commit, path)])
 
 
 def _get_file_diff(path, commit):
   """Returns a list of (linenum, lines) tuples that the commit touched."""
-  output = _run_command(['git', 'show', '-p', '--pretty=format:',
-                         '--no-ext-diff', commit, path])
+  command = ['git', 'diff', '-p', '--pretty=format:', '--no-ext-diff']
+  if commit == PRE_SUBMIT:
+    command += ['HEAD', path]
+  else:
+    command += [commit, path]
+  output = _run_command(command)
 
   new_lines = []
   line_num = 0
@@ -307,6 +318,9 @@ def _get_affected_files(commit, include_deletes=False, relative=False):
   Returns:
     A list of modified/added (and perhaps deleted) files
   """
+  if commit == PRE_SUBMIT:
+    return _run_command(['git', 'diff-index', '--cached',
+                         '--name-only', 'HEAD']).split()
   output = _run_command(['git', 'diff', '--raw', commit + '^!'])
   return _parse_affected_files(output, include_deletes, relative)
 
@@ -319,6 +333,8 @@ def _get_commits():
 
 def _get_commit_desc(commit):
   """Returns the full commit message of a commit."""
+  if commit == PRE_SUBMIT:
+    return ''
   return _run_command(['git', 'log', '--format=%s%n%n%b', commit + '^!'])
 
 
@@ -740,7 +756,12 @@ def _check_license(_project, commit):
 def _run_checkpatch(_project, commit, options=()):
   """Runs checkpatch.pl on the given project"""
   hooks_dir = _get_hooks_dir()
-  cmd = ['%s/checkpatch.pl' % hooks_dir] + list(options) + ['-']
+  options = list(options)
+  if commit == PRE_SUBMIT:
+    # The --ignore option must be present and include 'MISSING_SIGN_OFF' in
+    # this case.
+    options.append('--ignore=MISSING_SIGN_OFF')
+  cmd = ['%s/checkpatch.pl' % hooks_dir] + options + ['-']
   p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
   output = p.communicate(_get_patch(commit))[0]
   if p.returncode:
@@ -806,6 +827,8 @@ def _check_manifests(_project, commit):
 
 def _check_change_has_branch_field(_project, commit):
   """Check for a non-empty 'BRANCH=' field in the commit message."""
+  if commit == PRE_SUBMIT:
+    return
   BRANCH_RE = r'\nBRANCH=\S+'
 
   if not re.search(BRANCH_RE, _get_commit_desc(commit)):
@@ -816,6 +839,8 @@ def _check_change_has_branch_field(_project, commit):
 
 def _check_change_has_signoff_field(_project, commit):
   """Check for a non-empty 'Signed-off-by:' field in the commit message."""
+  if commit == PRE_SUBMIT:
+    return
   SIGNOFF_RE = r'\nSigned-off-by: \S+'
 
   if not re.search(SIGNOFF_RE, _get_commit_desc(commit)):
@@ -890,13 +915,18 @@ def _check_project_prefix(_project, commit):
 
 # Base
 
-
-# A list of hooks that are not project-specific
-_COMMON_HOOKS = [
+# A list of hooks which are not project specific and check patch description
+# (as opposed to patch body).
+_PATCH_DESCRIPTION_HOOKS = [
     _check_change_has_bug_field,
     _check_change_has_valid_cq_depend,
     _check_change_has_test_field,
     _check_change_has_proper_changeid,
+]
+
+
+# A list of hooks that are not project-specific
+_COMMON_HOOKS = [
     _check_ebuild_eapi,
     _check_ebuild_keywords,
     _check_ebuild_licenses,
@@ -992,10 +1022,14 @@ def _get_project_hook_scripts(config):
   return [x[1] for x in hook_names_values]
 
 
-def _get_project_hooks(project):
+def _get_project_hooks(project, presubmit):
   """Returns a list of hooks that need to be run for a project.
 
   Expects to be called from within the project root.
+
+  Args:
+    project: A string, name of the project.
+    presubmit: A Boolean, True if the check is run as a git pre-submit script.
   """
   config = ConfigParser.RawConfigParser()
   try:
@@ -1004,8 +1038,13 @@ def _get_project_hooks(project):
     # Just use an empty config file
     config = ConfigParser.RawConfigParser()
 
+  if presubmit:
+    hook_list = _COMMON_HOOKS
+  else:
+    hook_list = _PATCH_DESCRIPTION_HOOKS + _COMMON_HOOKS
+
   disabled_hooks = _get_disabled_hooks(config)
-  hooks = [hook for hook in _COMMON_HOOKS if hook not in disabled_hooks]
+  hooks = [hook for hook in hook_list if hook not in disabled_hooks]
 
   if project in _PROJECT_SPECIFIC_HOOKS:
     hooks.extend(hook for hook in _PROJECT_SPECIFIC_HOOKS[project]
@@ -1017,7 +1056,8 @@ def _get_project_hooks(project):
   return hooks
 
 
-def _run_project_hooks(project, proj_dir=None, commit_list=None):
+def _run_project_hooks(project, proj_dir=None,
+                       commit_list=None, presubmit=False):
   """For each project run its project specific hook from the hooks dictionary.
 
   Args:
@@ -1026,6 +1066,7 @@ def _run_project_hooks(project, proj_dir=None, commit_list=None):
         we'll ask repo.
     commit_list: A list of commits to run hooks against.  If None or empty list
         then we'll automatically get the list of commits that would be uploaded.
+    presubmit: A Boolean, True if the check is run as a git pre-submit script.
 
   Returns:
     Boolean value of whether any errors were ecountered while running the hooks.
@@ -1055,7 +1096,7 @@ def _run_project_hooks(project, proj_dir=None, commit_list=None):
       os.chdir(pwd)
       return True
 
-  hooks = _get_project_hooks(project)
+  hooks = _get_project_hooks(project, presubmit)
   error_found = False
   for commit in commit_list:
     error_list = []
@@ -1195,7 +1236,13 @@ def direct_main(args, verbose=False):
   parser.add_option('--rerun-since', default=None,
                     help='Rerun hooks on old commits since the given date.  '
                     'The date should match git log\'s concept of a date.  '
-                    'e.g. 2012-06-20')
+                    'e.g. 2012-06-20. This option is mutually exclusive '
+                    'with --pre-submit.')
+  parser.add_option('--pre-submit', action="store_true",
+                    help='Run the check against the pending commit.  '
+                    'This option should be used at the \'git commit\' '
+                    'phase as opposed to \'repo upload\'. This option '
+                    'is mutually exclusive with --rerun-since.')
 
   parser.usage = "pre-upload.py [options] [commits]"
 
@@ -1214,6 +1261,14 @@ def direct_main(args, verbose=False):
     bot_commits = set(bot_commits)
     args = [c for c in all_commits if c not in bot_commits]
 
+    if opts.pre_submit:
+      raise BadInvocation('rerun-since and pre-submit can not be '
+                          'used together')
+  if opts.pre_submit:
+    if args:
+      raise BadInvocation('Can\'t pass commits and use pre-submit: %s' %
+                          ' '.join(args))
+    args = [PRE_SUBMIT,]
 
   # Check/normlaize git dir; if unspecified, we'll use the root of the git
   # project from CWD
@@ -1239,7 +1294,8 @@ def direct_main(args, verbose=False):
     print("Running hooks on %s" % (opts.project))
 
   found_error = _run_project_hooks(opts.project, proj_dir=opts.dir,
-                                   commit_list=args)
+                                   commit_list=args,
+                                   presubmit=opts.pre_submit)
   if found_error:
     return 1
   return 0

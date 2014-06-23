@@ -761,7 +761,9 @@ def _run_checkpatch_depthcharge(project, commit):
   """Runs checkpatch with options for depthcharge."""
   return _run_checkpatch(project, commit, [
       '--no-tree',
-      '--ignore=CAMELCASE,C99_COMMENTS,NEW_TYPEDEFS,CONFIG_DESCRIPTION'])
+      '--ignore=CAMELCASE,C99_COMMENTS,NEW_TYPEDEFS,CONFIG_DESCRIPTION,'
+      'SPACING,PREFER_PACKED,PREFER_PRINTF,PREFER_ALIGNED,GLOBAL_INITIALISERS,'
+      'INITIALISED_STATIC,OPEN_BRACE,TRAILING_STATEMENTS'])
 
 
 def _kernel_configcheck(_project, commit):

@@ -862,6 +862,32 @@ def _moved_to_platform2(project, _commit):
                      'made there.' % project)
 
 
+def _check_project_prefix(_project, commit):
+  """Fails if the change is project specific and the commit message is not
+  prefixed by the project_name.
+  """
+
+  files = _get_affected_files(commit, relative=True)
+  prefix = os.path.commonprefix(files)
+  prefix = os.path.dirname(prefix)
+
+  # If there is no common prefix, the CL span multiple projects.
+  if prefix == '':
+    return
+
+  project_name = prefix.split('/')[0]
+  alias_file = os.path.join(prefix, '.project_alias')
+  # If an alias exists, use it.
+  if os.path.isfile(alias_file):
+    with open(alias_file, 'r') as f:
+      project_name = f.read().strip()
+
+  if not _get_commit_desc(commit).startswith(project_name + ': '):
+    return HookFailure('The commit title for changes affecting only %s'
+                       ' should start with \"%s: \"'
+                       % (project_name, project_name))
+
+
 # Base
 
 
@@ -897,6 +923,7 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/overlays/board-overlays": [_check_manifests],
     "chromiumos/overlays/chromiumos-overlay": [_check_manifests],
     "chromiumos/overlays/portage-stable": [_check_manifests],
+    "chromiumos/platform2": [_check_project_prefix],
     "chromiumos/platform/depthcharge": [_run_checkpatch_depthcharge],
     "chromiumos/platform/ec": [_run_checkpatch_ec,
                                _check_change_has_branch_field],

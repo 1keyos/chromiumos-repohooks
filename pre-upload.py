@@ -895,13 +895,7 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/overlays/board-overlays": [_check_manifests],
     "chromiumos/overlays/chromiumos-overlay": [_check_manifests],
     "chromiumos/overlays/portage-stable": [_check_manifests],
-    # TODO(bsimonnet): remove this check once src/platform/common-mk has been
-    # removed from the manifest (crbug.com/379236).
-    "chromiumos/platform/common-mk": [_moved_to_platform2],
-    # TODO(bsimonnet): remove this check once src/platform/libchromeos has been
-    # removed from the manifest (crbug.com/379939)
     "chromiumos/platform/depthcharge": [_run_checkpatch_depthcharge],
-    "chromiumos/platform/libchromeos": [_moved_to_platform2],
     "chromiumos/platform/ec": [_run_checkpatch_ec,
                                _check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],

@@ -786,6 +786,13 @@ def _run_checkpatch_depthcharge(project, commit):
       'SPACING,PREFER_PACKED,PREFER_PRINTF,PREFER_ALIGNED,GLOBAL_INITIALISERS,'
       'INITIALISED_STATIC,OPEN_BRACE,TRAILING_STATEMENTS'])
 
+def _run_checkpatch_coreboot(project, commit):
+  """Runs checkpatch with options for coreboot."""
+  return _run_checkpatch(project, commit, [
+      '--no-tree',
+      '--ignore=NEW_TYPEDEFS,PREFER_PACKED,PREFER_PRINTF,PREFER_ALIGNED,'
+      'GLOBAL_INITIALISERS,INITIALISED_STATIC'])
+
 
 def _kernel_configcheck(_project, commit):
   """Makes sure kernel config changes are not mixed with code changes"""
@@ -954,12 +961,14 @@ _PROJECT_SPECIFIC_HOOKS = {
     "chromiumos/overlays/chromiumos-overlay": [_check_manifests],
     "chromiumos/overlays/portage-stable": [_check_manifests],
     "chromiumos/platform2": [_check_project_prefix],
-    "chromiumos/platform/depthcharge": [_run_checkpatch_depthcharge],
+    "chromiumos/platform/depthcharge": [_check_change_has_signoff_field,
+                                        _run_checkpatch_depthcharge],
     "chromiumos/platform/ec": [_run_checkpatch_ec,
                                _check_change_has_branch_field],
     "chromiumos/platform/mosys": [_check_change_has_branch_field],
     "chromiumos/platform/vboot_reference": [_check_change_has_branch_field],
-    "chromiumos/third_party/coreboot": [_check_change_has_signoff_field],
+    "chromiumos/third_party/coreboot": [_check_change_has_signoff_field,
+                                        _run_checkpatch_coreboot],
     "chromiumos/third_party/flashrom": [_check_change_has_branch_field],
     "chromiumos/third_party/kernel": [_run_checkpatch, _kernel_configcheck],
     "chromiumos/third_party/kernel-next": [_run_checkpatch,

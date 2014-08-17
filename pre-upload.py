@@ -30,7 +30,7 @@ if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
 from chromite.lib import patch
-from chromite.licensing import licenses
+from chromite.licensing import licenses_lib
 
 PRE_SUBMIT = 'pre-submit'
 
@@ -656,7 +656,7 @@ def _check_ebuild_licenses(_project, commit):
       continue
 
     try:
-      license_types = licenses.GetLicenseTypesFromEbuild(ebuild)
+      license_types = licenses_lib.GetLicenseTypesFromEbuild(ebuild)
     except ValueError as e:
       return HookFailure(e.message, [ebuild])
 
@@ -664,7 +664,7 @@ def _check_ebuild_licenses(_project, commit):
     for license_type in [x for x in license_types
                          if x not in LICENSES_IGNORE and not x.endswith('?')]:
       try:
-        licenses.Licensing.FindLicenseType(license_type)
+        licenses_lib.Licensing.FindLicenseType(license_type)
       except AssertionError as e:
         return HookFailure(e.message, [ebuild])
 

@@ -865,7 +865,7 @@ def _run_checkpatch_coreboot(project, commit):
       '--min-conf-desc-length=2',
       '--no-tree',
       '--ignore=NEW_TYPEDEFS,PREFER_PACKED,PREFER_PRINTF,PREFER_ALIGNED,'
-      'GLOBAL_INITIALISERS,INITIALISED_STATIC'])
+      'GLOBAL_INITIALISERS,INITIALISED_STATIC,C99_COMMENTS'])
 
 
 def _kernel_configcheck(_project, commit):

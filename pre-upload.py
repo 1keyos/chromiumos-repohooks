@@ -750,6 +750,53 @@ def _check_license(_project, commit):
   return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
 
 
+def _check_layout_conf(_project, commit):
+  """Verifies the metadata/layout.conf file."""
+  repo_name = 'profiles/repo_name'
+  layout_path = 'metadata/layout.conf'
+
+  files = _get_affected_files(commit, relative=True)
+
+  # Disallow new repos with the repo_name file.
+  if repo_name in files:
+    return HookFailure('%s: use "repo-name" in %s instead' %
+                       (repo_name, layout_path))
+
+  # If the layout.conf file doesn't exist, nothing else to do.
+  if layout_path not in files:
+    return
+
+  errors = []
+
+  # Make sure the config file is sorted.
+  data = [x for x in _get_file_content(layout_path, commit).splitlines()
+          if x and x[0] != '#']
+  if sorted(data) != data:
+    errors += ['keep lines sorted']
+
+  # Require people to set specific values all the time.
+  settings = (
+      # TODO: Enable this for everyone.  http://crbug.com/408038
+      #('fast caching', 'cache-format = md5-dict'),
+      ('fast manifests', 'thin-manifests = true'),
+      ('extra features', 'profile-formats = portage-2'),
+  )
+  for reason, line in settings:
+    if line not in data:
+      errors += ['enable %s with: %s' % (reason, line)]
+
+  # Require one of these settings.
+  if ('use-manifests = true' not in data and
+      'use-manifests = strict' not in data):
+    errors += ['enable file checking with: use-manifests = true']
+
+  if errors:
+    lines = [('%s: error(s) detected '
+              '(see the portage(5) man page for more details)') %
+             layout_path] + errors
+    return HookFailure('\n\t- '.join(lines))
+
+
 # Project-specific hooks
 
 
@@ -940,6 +987,7 @@ _COMMON_HOOKS = [
     _check_ebuild_virtual_pv,
     _check_no_stray_whitespace,
     _check_no_long_lines,
+    _check_layout_conf,
     _check_license,
     _check_no_tabs,
     _check_for_uprev,

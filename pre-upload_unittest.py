@@ -281,8 +281,10 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
     ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_VARIANT_OVERLAY, 'H')
     self.assertTrue(isinstance (ret, errors.HookFailure))
 
+
 class CheckGitOutputParsing(cros_test_lib.MockTestCase):
   """Tests for git output parsing."""
+
   def testParseAffectedFiles(self):
     """Test parsing git diff --raw output."""
     # Sample from git diff --raw.
@@ -303,6 +305,50 @@ class CheckGitOutputParsing(cros_test_lib.MockTestCase):
                                               include_deletes=False,
                                               relative=True)
     self.assertEqual(result, expected_modified_files_no_deletes)
+
+
+class CheckLicenseCopyrightHeader(cros_test_lib.MockTestCase):
+  """Tests for _check_license."""
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+    self.content_mock = self.PatchObject(pre_upload, '_get_file_content')
+
+  def testOldHeaders(self):
+    """Accept old header styles."""
+    HEADERS = (
+        ('#!/bin/sh\n'
+         '# Copyright (c) 2012 The Chromium OS Authors. All rights reserved.\n'
+         '# Use of this source code is governed by a BSD-style license that'
+         ' can be\n'
+         '# found in the LICENSE file.\n'),
+        ('// Copyright 2010-13 The Chromium OS Authors. All rights reserved.\n'
+         '// Use of this source code is governed by a BSD-style license that'
+         ' can be\n'
+         '// found in the LICENSE file.\n'),
+    )
+    self.file_mock.return_value = ['file']
+    for header in HEADERS:
+      self.content_mock.return_value = header
+      self.assertEqual(None, pre_upload._check_license('proj', 'sha1'))
+
+  def testRejectC(self):
+    """Reject the (c) in newer headers."""
+    HEADERS = (
+        ('// Copyright (c) 2015 The Chromium OS Authors. All rights reserved.\n'
+         '// Use of this source code is governed by a BSD-style license that'
+         ' can be\n'
+         '// found in the LICENSE file.\n'),
+        ('// Copyright (c) 2020 The Chromium OS Authors. All rights reserved.\n'
+         '// Use of this source code is governed by a BSD-style license that'
+         ' can be\n'
+         '// found in the LICENSE file.\n'),
+    )
+    self.file_mock.return_value = ['file']
+    for header in HEADERS:
+      self.content_mock.return_value = header
+      self.assertNotEqual(None, pre_upload._check_license('proj', 'sha1'))
+
 
 if __name__ == '__main__':
   cros_test_lib.main()

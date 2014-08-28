@@ -63,6 +63,8 @@ COMMON_EXCLUDED_PATHS = [
 
     # ignore profiles data (like overlay-tegra2/profiles)
     r".*/overlay-.*/profiles/.*",
+    r"^profiles/.*$",
+
     # ignore minified js and jquery
     r".*\.min\.js",
     r".*jquery.*\.js",
@@ -152,38 +154,6 @@ def _filter_files(files, include_list, exclude_list=()):
         not _match_regex_list(f, exclude_list)):
       filtered.append(f)
   return filtered
-
-
-def _verify_header_content(commit, content, fail_msg):
-  """Verify that file headers contain specified content.
-
-  Args:
-    commit: the affected commit.
-    content: the content of the header to be verified.
-    fail_msg: the first message to display in case of failure.
-
-  Returns:
-    The return value of HookFailure().
-  """
-  license_re = re.compile(content, re.MULTILINE)
-  bad_files = []
-  files = _filter_files(_get_affected_files(commit),
-                        COMMON_INCLUDED_PATHS,
-                        COMMON_EXCLUDED_PATHS)
-
-  for f in files:
-    # Ignore non-existant files and symlinks
-    if os.path.exists(f) and not os.path.islink(f):
-      contents = open(f).read()
-      if not contents:
-        # Ignore empty files
-        continue
-      if not license_re.search(contents):
-        bad_files.append(f)
-  if bad_files:
-    msg = "%s:\n%s\n%s" % (fail_msg, license_re.pattern,
-                           "Found a bad header in these files:")
-    return HookFailure(msg, bad_files)
 
 
 # Git Helpers
@@ -736,18 +706,55 @@ def _check_change_has_proper_changeid(_project, commit):
 
 
 def _check_license(_project, commit):
-  """Verifies the license header."""
-  LICENSE_HEADER = (
-      r".* Copyright( \(c\))? 20[-0-9]{2,7} The Chromium OS Authors\. "
-          "All rights reserved\." "\n"
-      r".* Use of this source code is governed by a BSD-style license that can "
-          "be\n"
-      r".* found in the LICENSE file\."
-          "\n"
-  )
-  FAIL_MSG = "License must match"
+  """Verifies the license/copyright header.
 
-  return _verify_header_content(commit, LICENSE_HEADER, FAIL_MSG)
+  Should be following the spec:
+  http://dev.chromium.org/developers/coding-style#TOC-File-headers
+  """
+  # For older years, be a bit more flexible as our policy says leave them be.
+  LICENSE_HEADER = (
+      r'.* Copyright( \(c\))? 20[-0-9]{2,7} The Chromium OS Authors\. '
+          'All rights reserved\.' '\n'
+      r'.* Use of this source code is governed by a BSD-style license that can '
+          'be\n'
+      r'.* found in the LICENSE file\.'
+          '\n'
+  )
+  license_re = re.compile(LICENSE_HEADER, re.MULTILINE)
+
+  # For newer years, be stricter.
+  COPYRIGHT_LINE = (
+      r'.* Copyright \(c\) 20(1[5-9]|[2-9][0-9]) The Chromium OS Authors\. '
+          'All rights reserved\.' '\n'
+  )
+  copyright_re = re.compile(COPYRIGHT_LINE)
+
+  bad_files = []
+  bad_copyright_files = []
+  files = _filter_files(_get_affected_files(commit, relative=True),
+                        COMMON_INCLUDED_PATHS,
+                        COMMON_EXCLUDED_PATHS)
+
+  for f in files:
+    contents = _get_file_content(f, commit)
+    if not contents:
+      # Ignore empty files.
+      continue
+
+    if not license_re.search(contents):
+      bad_files.append(f)
+    elif copyright_re.search(contents):
+      bad_copyright_files.append(f)
+
+  if bad_files:
+    msg = '%s:\n%s\n%s' % (
+        'License must match', license_re.pattern,
+        'Found a bad header in these files:')
+    return HookFailure(msg, bad_files)
+
+  if bad_copyright_files:
+    msg = 'Do not use (c) in copyright headers in new files:'
+    return HookFailure(msg, bad_copyright_files)
 
 
 def _check_layout_conf(_project, commit):

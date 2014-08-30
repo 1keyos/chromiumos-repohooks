@@ -843,6 +843,7 @@ def _run_checkpatch_depthcharge(project, commit):
 def _run_checkpatch_coreboot(project, commit):
   """Runs checkpatch with options for coreboot."""
   return _run_checkpatch(project, commit, [
+      '--min-conf-desc-length=2',
       '--no-tree',
       '--ignore=NEW_TYPEDEFS,PREFER_PACKED,PREFER_PRINTF,PREFER_ALIGNED,'
       'GLOBAL_INITIALISERS,INITIALISED_STATIC'])

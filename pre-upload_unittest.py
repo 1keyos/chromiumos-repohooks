@@ -207,6 +207,75 @@ src_compile() { }
     self.assertEqual(ret, None)
 
 
+class CheckEbuildKeywords(cros_test_lib.MockTestCase):
+  """Tests for _check_ebuild_keywords."""
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+    self.content_mock = self.PatchObject(pre_upload, '_get_file_content')
+
+  def testNoEbuilds(self):
+    """If no ebuilds are found, do not scan."""
+    self.file_mock.return_value = ['a.file', 'ebuild-is-not.foo']
+
+    ret = pre_upload._check_ebuild_keywords('overlay', 'HEAD')
+    self.assertEqual(ret, None)
+
+    self.assertEqual(self.content_mock.call_count, 0)
+
+  def testSomeEbuilds(self):
+    """If ebuilds are found, only scan them."""
+    self.file_mock.return_value = ['a.file', 'blah', 'foo.ebuild', 'cow']
+    self.content_mock.return_value = ''
+
+    ret = pre_upload._check_ebuild_keywords('overlay', 'HEAD')
+    self.assertEqual(ret, None)
+
+    self.assertEqual(self.content_mock.call_count, 1)
+
+  def _CheckContent(self, content, fails):
+    """Test helper for inputs/outputs.
+
+    Args:
+      content: The ebuild content to test.
+      fails: Whether |content| should trigger a hook failure.
+    """
+    self.file_mock.return_value = ['a.ebuild']
+    self.content_mock.return_value = content
+
+    ret = pre_upload._check_ebuild_keywords('overlay', 'HEAD')
+    if fails:
+      self.assertTrue(isinstance (ret, errors.HookFailure))
+    else:
+      self.assertEqual(ret, None)
+
+    self.assertEqual(self.content_mock.call_count, 1)
+
+  def testEmpty(self):
+    """Check KEYWORDS= is accepted."""
+    self._CheckContent('# HEADER\nKEYWORDS=\nblah\n', False)
+
+  def testEmptyQuotes(self):
+    """Check KEYWORDS="" is accepted."""
+    self._CheckContent('# HEADER\nKEYWORDS="    "\nblah\n', False)
+
+  def testStableGlob(self):
+    """Check KEYWORDS=* is accepted."""
+    self._CheckContent('# HEADER\nKEYWORDS="\t*\t"\nblah\n', False)
+
+  def testUnstableGlob(self):
+    """Check KEYWORDS=~* is accepted."""
+    self._CheckContent('# HEADER\nKEYWORDS="~* "\nblah\n', False)
+
+  def testRestrictedGlob(self):
+    """Check KEYWORDS=-* is accepted."""
+    self._CheckContent('# HEADER\nKEYWORDS="\t-* arm"\nblah\n', False)
+
+  def testMissingGlobs(self):
+    """Reject KEYWORDS missing any globs."""
+    self._CheckContent('# HEADER\nKEYWORDS="~arm x86"\nblah\n', True)
+
+
 class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
   """Tests for _check_ebuild_virtual_pv."""
 

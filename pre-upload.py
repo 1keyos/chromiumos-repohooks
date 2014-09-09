@@ -592,7 +592,10 @@ def _check_ebuild_keywords(_project, commit):
                           ebuilds_re)
 
   for ebuild in ebuilds:
-    for _, line in _get_file_diff(ebuild, commit):
+    # We get the full content rather than a diff as the latter does not work
+    # on new files (like when adding new ebuilds).
+    lines = _get_file_content(ebuild, commit).splitlines()
+    for line in lines:
       m = get_keywords.match(line)
       if m:
         keywords = set(m.group(1).split())

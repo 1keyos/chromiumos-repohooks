@@ -62,7 +62,7 @@ COMMON_EXCLUDED_PATHS = [
     r".*/metadata/[^/]*cache[^/]*/[^/]+/[^/]+$",
 
     # ignore profiles data (like overlay-tegra2/profiles)
-    r".*/overlay-.*/profiles/.*",
+    r"(^|.*/)overlay-.*/profiles/.*",
     r"^profiles/.*$",
 
     # ignore minified js and jquery
@@ -763,48 +763,61 @@ def _check_license(_project, commit):
 def _check_layout_conf(_project, commit):
   """Verifies the metadata/layout.conf file."""
   repo_name = 'profiles/repo_name'
+  repo_names = []
   layout_path = 'metadata/layout.conf'
+  layout_paths = []
 
-  files = _get_affected_files(commit, relative=True)
+  # Handle multiple overlays in a single commit (like the public tree).
+  for f in _get_affected_files(commit, relative=True):
+    if f.endswith(repo_name):
+      repo_names.append(f)
+    elif f.endswith(layout_path):
+      layout_paths.append(f)
 
   # Disallow new repos with the repo_name file.
-  if repo_name in files:
+  if repo_names:
     return HookFailure('%s: use "repo-name" in %s instead' %
-                       (repo_name, layout_path))
+                       (repo_names, layout_path))
 
-  # If the layout.conf file doesn't exist, nothing else to do.
-  if layout_path not in files:
-    return
+  # Gather all the errors in one pass so we show one full message.
+  all_errors = {}
+  for layout_path in layout_paths:
+    all_errors[layout_path] = errors = []
 
-  errors = []
+    # Make sure the config file is sorted.
+    data = [x for x in _get_file_content(layout_path, commit).splitlines()
+            if x and x[0] != '#']
+    if sorted(data) != data:
+      errors += ['keep lines sorted']
 
-  # Make sure the config file is sorted.
-  data = [x for x in _get_file_content(layout_path, commit).splitlines()
-          if x and x[0] != '#']
-  if sorted(data) != data:
-    errors += ['keep lines sorted']
+    # Require people to set specific values all the time.
+    settings = (
+        # TODO: Enable this for everyone.  http://crbug.com/408038
+        #('fast caching', 'cache-format = md5-dict'),
+        ('fast manifests', 'thin-manifests = true'),
+        ('extra features', 'profile-formats = portage-2'),
+    )
+    for reason, line in settings:
+      if line not in data:
+        errors += ['enable %s with: %s' % (reason, line)]
 
-  # Require people to set specific values all the time.
-  settings = (
-      # TODO: Enable this for everyone.  http://crbug.com/408038
-      #('fast caching', 'cache-format = md5-dict'),
-      ('fast manifests', 'thin-manifests = true'),
-      ('extra features', 'profile-formats = portage-2'),
-  )
-  for reason, line in settings:
-    if line not in data:
-      errors += ['enable %s with: %s' % (reason, line)]
+    # Require one of these settings.
+    if ('use-manifests = true' not in data and
+        'use-manifests = strict' not in data):
+      errors += ['enable file checking with: use-manifests = true']
 
-  # Require one of these settings.
-  if ('use-manifests = true' not in data and
-      'use-manifests = strict' not in data):
-    errors += ['enable file checking with: use-manifests = true']
+    # Require repo-name to be set.
+    if 'repo-name = ' not in data:
+      errors += ['set the board name with: repo-name = $BOARD']
 
-  if errors:
-    lines = [('%s: error(s) detected '
-              '(see the portage(5) man page for more details)') %
-             layout_path] + errors
-    return HookFailure('\n\t- '.join(lines))
+  # Summarize all the errors we saw (if any).
+  lines = ''
+  for layout_path, errors in all_errors.items():
+    if errors:
+      lines += '\n\t- '.join(['\n* %s:' % layout_path] + errors)
+  if lines:
+    lines = 'See the portage(5) man page for layout.conf details' + lines + '\n'
+    return HookFailure(lines)
 
 
 # Project-specific hooks

@@ -592,6 +592,7 @@ def _check_ebuild_keywords(_project, commit):
   ebuilds = _filter_files(_get_affected_files(commit, relative=True),
                           ebuilds_re)
 
+  bad_ebuilds = []
   for ebuild in ebuilds:
     # We get the full content rather than a diff as the latter does not work
     # on new files (like when adding new ebuilds).
@@ -603,17 +604,20 @@ def _check_ebuild_keywords(_project, commit):
         if not keywords or WHITELIST - keywords != WHITELIST:
           continue
 
-        return HookFailure(
-            'Please update KEYWORDS to use a glob:\n'
-            'If the ebuild should be marked stable (normal for non-9999 '
-            'ebuilds):\n'
-            '  KEYWORDS="*"\n'
-            'If the ebuild should be marked unstable (normal for '
-            'cros-workon / 9999 ebuilds):\n'
-            '  KEYWORDS="~*"\n'
-            'If the ebuild needs to be marked for only specific arches,'
-            'then use -* like so:\n'
-            '  KEYWORDS="-* arm ..."\n')
+        bad_ebuilds.append(ebuild)
+
+  if bad_ebuilds:
+    return HookFailure(
+        '%s\n'
+        'Please update KEYWORDS to use a glob:\n'
+        'If the ebuild should be marked stable (normal for non-9999 ebuilds):\n'
+        '  KEYWORDS="*"\n'
+        'If the ebuild should be marked unstable (normal for '
+        'cros-workon / 9999 ebuilds):\n'
+        '  KEYWORDS="~*"\n'
+        'If the ebuild needs to be marked for only specific arches,'
+        'then use -* like so:\n'
+        '  KEYWORDS="-* arm ..."\n' % '\n* '.join(bad_ebuilds))
 
 
 def _check_ebuild_licenses(_project, commit):

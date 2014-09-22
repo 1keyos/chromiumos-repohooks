@@ -807,7 +807,10 @@ def _check_layout_conf(_project, commit):
       errors += ['enable file checking with: use-manifests = true']
 
     # Require repo-name to be set.
-    if 'repo-name = ' not in data:
+    for line in data:
+      if line.startswith('repo-name = '):
+        break
+    else:
       errors += ['set the board name with: repo-name = $BOARD']
 
   # Summarize all the errors we saw (if any).

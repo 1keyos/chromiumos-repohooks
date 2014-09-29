@@ -24,6 +24,7 @@ if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
 from chromite.lib import cros_test_lib
+from chromite.lib import osutils
 
 
 pre_upload = __import__('pre-upload')
@@ -70,6 +71,57 @@ class CheckNoLongLinesTest(cros_test_lib.MoxTestCase):
     self.assertEquals(['x.py, line %d, 81 chars' % line
                        for line in [3, 4, 8]],
                       failure.items)
+
+
+class CheckProjectPrefix(cros_test_lib.MockTempDirTestCase):
+  """Tests for _check_project_prefix."""
+
+  def setUp(self):
+    self.orig_cwd = os.getcwd()
+    os.chdir(self.tempdir)
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+    self.desc_mock = self.PatchObject(pre_upload, '_get_commit_desc')
+
+  def tearDown(self):
+    os.chdir(self.orig_cwd)
+
+  def _WriteAliasFile(self, filename, project):
+    """Writes a project name to a file, creating directories if needed."""
+    os.makedirs(os.path.dirname(filename))
+    osutils.WriteFile(filename, project)
+
+  def testInvalidPrefix(self):
+    """Report an error when the prefix doesn't match the base directory."""
+    self.file_mock.return_value = ['foo/foo.cc', 'foo/subdir/baz.cc']
+    self.desc_mock.return_value = 'bar: Some commit'
+    failure = pre_upload._check_project_prefix('PROJECT', 'COMMIT')
+    self.assertTrue(failure)
+    self.assertEquals(('The commit title for changes affecting only foo' +
+                       ' should start with "foo: "'), failure.msg)
+
+  def testValidPrefix(self):
+    """Use a prefix that matches the base directory."""
+    self.file_mock.return_value = ['foo/foo.cc', 'foo/subdir/baz.cc']
+    self.desc_mock.return_value = 'foo: Change some files.'
+    self.assertFalse(pre_upload._check_project_prefix('PROJECT', 'COMMIT'))
+
+  def testAliasFile(self):
+    """Use .project_alias to override the project name."""
+    self._WriteAliasFile('foo/.project_alias', 'project')
+    self.file_mock.return_value = ['foo/foo.cc', 'foo/subdir/bar.cc']
+    self.desc_mock.return_value = 'project: Use an alias.'
+    self.assertFalse(pre_upload._check_project_prefix('PROJECT', 'COMMIT'))
+
+  def testAliasFileWithSubdirs(self):
+    """Check that .project_alias is used when only modifying subdirectories."""
+    self._WriteAliasFile('foo/.project_alias', 'project')
+    self.file_mock.return_value = [
+        'foo/subdir/foo.cc',
+        'foo/subdir/bar.cc'
+        'foo/subdir/blah/baz.cc'
+    ]
+    self.desc_mock.return_value = 'project: Alias with subdirs.'
+    self.assertFalse(pre_upload._check_project_prefix('PROJECT', 'COMMIT'))
 
 
 class CheckKernelConfig(cros_test_lib.MoxTestCase):

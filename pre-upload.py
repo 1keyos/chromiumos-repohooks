@@ -29,6 +29,7 @@ from errors import (VerifyException, HookFailure, PrintErrorForProject,
 if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
+from chromite.lib import osutils
 from chromite.lib import patch
 from chromite.licensing import licenses_lib
 
@@ -978,15 +979,23 @@ def _check_project_prefix(_project, commit):
   prefix = os.path.dirname(prefix)
 
   # If there is no common prefix, the CL span multiple projects.
-  if prefix == '':
+  if not prefix:
     return
 
   project_name = prefix.split('/')[0]
-  alias_file = os.path.join(prefix, '.project_alias')
-  # If an alias exists, use it.
-  if os.path.isfile(alias_file):
-    with open(alias_file, 'r') as f:
-      project_name = f.read().strip()
+
+  # The common files may all be within a subdirectory of the main project
+  # directory, so walk up the tree until we find an alias file.
+  # _get_affected_files() should return relative paths, but check against '/' to
+  # ensure that this loop terminates even if it receives an absolute path.
+  while prefix and prefix != '/':
+    alias_file = os.path.join(prefix, '.project_alias')
+
+    # If an alias exists, use it.
+    if os.path.isfile(alias_file):
+      project_name = osutils.ReadFile(alias_file).strip()
+
+    prefix = os.path.dirname(prefix)
 
   if not _get_commit_desc(commit).startswith(project_name + ': '):
     return HookFailure('The commit title for changes affecting only %s'

@@ -714,6 +714,30 @@ def _check_change_has_proper_changeid(_project, commit):
     return HookFailure('Change-Id must be in last paragraph of description.')
 
 
+def _check_commit_message_style(_project, commit):
+  """Verify that the commit message matches our style.
+
+  We do not check for BUG=/TEST=/etc... lines here as that is handled by other
+  commit hooks.
+  """
+  desc = _get_commit_desc(commit)
+
+  # The first line should be by itself.
+  lines = desc.splitlines()
+  if len(lines) > 1 and lines[1]:
+    return HookFailure('The second line of the commit message must be blank.')
+
+  # The first line should be one sentence.
+  if '. ' in lines[0]:
+    return HookFailure('The first line cannot be more than one sentence.')
+
+  # The first line cannot be too long.
+  MAX_FIRST_LINE_LEN = 100
+  if len(lines[0]) > MAX_FIRST_LINE_LEN:
+    return HookFailure('The first line must be less than %i chars.' %
+                       MAX_FIRST_LINE_LEN)
+
+
 def _check_license(_project, commit):
   """Verifies the license/copyright header.
 
@@ -1017,6 +1041,7 @@ _PATCH_DESCRIPTION_HOOKS = [
     _check_change_has_valid_cq_depend,
     _check_change_has_test_field,
     _check_change_has_proper_changeid,
+    _check_commit_message_style,
 ]
 
 

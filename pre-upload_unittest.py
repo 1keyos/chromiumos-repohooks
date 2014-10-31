@@ -642,5 +642,31 @@ class CheckCommitMessageChangeId(CommitMessageTestCase):
     self.assertMessageRejected('\nChange-Id: I1234\nbar\n')
 
 
+class CheckCommitMessageStyle(CommitMessageTestCase):
+  """Tests for _check_commit_message_style."""
+
+  @staticmethod
+  def CheckMessage(project, commit):
+    return pre_upload._check_commit_message_style(project, commit)
+
+  def testNormal(self):
+    """Accept valid commit messages."""
+    self.assertMessageAccepted('one sentence.\n')
+    self.assertMessageAccepted('some.module: do it!\n')
+    self.assertMessageAccepted('one line\n\nmore stuff here.')
+
+  def testNoBlankSecondLine(self):
+    """Reject messages that have stuff on the second line."""
+    self.assertMessageRejected('one sentence.\nbad fish!\n')
+
+  def testFirstLineMultipleSentences(self):
+    """Reject messages that have more than one sentence in the summary."""
+    self.assertMessageRejected('one sentence. two sentence!\n')
+
+  def testFirstLineTooLone(self):
+    """Reject first lines that are too long."""
+    self.assertMessageRejected('o' * 200)
+
+
 if __name__ == '__main__':
   cros_test_lib.main()

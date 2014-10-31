@@ -707,9 +707,10 @@ def _check_ebuild_virtual_pv(project, commit):
 
 def _check_change_has_proper_changeid(_project, commit):
   """Verify that Change-ID is present in last paragraph of commit message."""
+  CHANGE_ID_RE = r'\nChange-Id: I[a-f0-9]+\n'
   desc = _get_commit_desc(commit)
-  loc = desc.rfind('\nChange-Id:')
-  if loc == -1 or re.search('\n\s*\n\s*\S+', desc[loc:]):
+  m = re.search(CHANGE_ID_RE, desc)
+  if not m or desc[m.end():].strip():
     return HookFailure('Change-Id must be in last paragraph of description.')
 
 

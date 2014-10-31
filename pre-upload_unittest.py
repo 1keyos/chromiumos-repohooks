@@ -471,5 +471,176 @@ class CheckLicenseCopyrightHeader(cros_test_lib.MockTestCase):
       self.assertNotEqual(None, pre_upload._check_license('proj', 'sha1'))
 
 
+class CommitMessageTestCase(cros_test_lib.MockTestCase):
+  """Test case for funcs that check commit messages."""
+
+  def setUp(self):
+    self.msg_mock = self.PatchObject(pre_upload, '_get_commit_desc')
+
+  @staticmethod
+  def CheckMessage(_project, _commit):
+    raise AssertionError('Test class must declare CheckMessage')
+    # This dummy return is to silence pylint warning W1111 so we don't have to
+    # enable it for all the call sites below.
+    return 1 # pylint: disable=W0101
+
+  def assertMessageAccepted(self, msg, project='project', commit='1234'):
+    """Assert _check_change_has_bug_field accepts |msg|."""
+    self.msg_mock.return_value = msg
+    ret = self.CheckMessage(project, commit)
+    self.assertEqual(ret, None)
+
+  def assertMessageRejected(self, msg, project='project', commit='1234'):
+    """Assert _check_change_has_bug_field rejects |msg|."""
+    self.msg_mock.return_value = msg
+    ret = self.CheckMessage(project, commit)
+    self.assertTrue(isinstance(ret, errors.HookFailure))
+
+
+class CheckCommitMessageBug(CommitMessageTestCase):
+  """Tests for _check_change_has_bug_field."""
+
+  @staticmethod
+  def CheckMessage(project, commit):
+    return pre_upload._check_change_has_bug_field(project, commit)
+
+  def testNormal(self):
+    """Accept a commit message w/a valid BUG."""
+    self.assertMessageAccepted('\nBUG=chromium:1234\n')
+    self.assertMessageAccepted('\nBUG=chrome-os-partner:1234\n')
+
+  def testNone(self):
+    """Accept BUG=None."""
+    self.assertMessageAccepted('\nBUG=None\n')
+    self.assertMessageAccepted('\nBUG=none\n')
+    self.assertMessageRejected('\nBUG=NONE\n')
+
+  def testBlank(self):
+    """Reject blank values."""
+    self.assertMessageRejected('\nBUG=\n')
+    self.assertMessageRejected('\nBUG=    \n')
+
+  def testNotFirstLine(self):
+    """Reject the first line."""
+    self.assertMessageRejected('BUG=None\n\n\n')
+
+  def testNotInline(self):
+    """Reject not at the start of line."""
+    self.assertMessageRejected('\n BUG=None\n')
+    self.assertMessageRejected('\n\tBUG=None\n')
+
+  def testOldTrackers(self):
+    """Reject commit messages using old trackers."""
+    self.assertMessageRejected('\nBUG=chromium-os:1234\n')
+
+  def testNoTrackers(self):
+    """Reject commit messages w/invalid trackers."""
+    self.assertMessageRejected('\nBUG=booga:1234\n')
+
+  def testMissing(self):
+    """Reject commit messages w/no BUG line."""
+    self.assertMessageRejected('foo\n')
+
+  def testCase(self):
+    """Reject bug lines that are not BUG."""
+    self.assertMessageRejected('\nbug=none\n')
+
+
+class CheckCommitMessageCqDepend(CommitMessageTestCase):
+  """Tests for _check_change_has_valid_cq_depend."""
+
+  @staticmethod
+  def CheckMessage(project, commit):
+    return pre_upload._check_change_has_valid_cq_depend(project, commit)
+
+  def testNormal(self):
+    """Accept valid CQ-DEPENDs line."""
+    self.assertMessageAccepted('\nCQ-DEPEND=CL:1234\n')
+
+  def testInvalid(self):
+    """Reject invalid CQ-DEPENDs line."""
+    self.assertMessageRejected('\nCQ-DEPEND=CL=1234\n')
+    self.assertMessageRejected('\nCQ-DEPEND=None\n')
+
+
+class CheckCommitMessageTest(CommitMessageTestCase):
+  """Tests for _check_change_has_test_field."""
+
+  @staticmethod
+  def CheckMessage(project, commit):
+    return pre_upload._check_change_has_test_field(project, commit)
+
+  def testNormal(self):
+    """Accept a commit message w/a valid TEST."""
+    self.assertMessageAccepted('\nTEST=i did it\n')
+
+  def testNone(self):
+    """Accept TEST=None."""
+    self.assertMessageAccepted('\nTEST=None\n')
+    self.assertMessageAccepted('\nTEST=none\n')
+
+  def testBlank(self):
+    """Reject blank values."""
+    self.assertMessageRejected('\nTEST=\n')
+    self.assertMessageRejected('\nTEST=     \n')
+
+  def testNotFirstLine(self):
+    """Reject the first line."""
+    self.assertMessageRejected('TEST=None\n\n\n')
+
+  def testNotInline(self):
+    """Reject not at the start of line."""
+    self.assertMessageRejected('\n TEST=None\n')
+    self.assertMessageRejected('\n\tTEST=None\n')
+
+  def testMissing(self):
+    """Reject commit messages w/no TEST line."""
+    self.assertMessageRejected('foo\n')
+
+  def testCase(self):
+    """Reject bug lines that are not TEST."""
+    self.assertMessageRejected('\ntest=none\n')
+
+
+class CheckCommitMessageChangeId(CommitMessageTestCase):
+  """Tests for _check_change_has_proper_changeid."""
+
+  @staticmethod
+  def CheckMessage(project, commit):
+    return pre_upload._check_change_has_proper_changeid(project, commit)
+
+  def testNormal(self):
+    """Accept a commit message w/a valid Change-Id."""
+    self.assertMessageAccepted('foo\n\nChange-Id: I1234\n')
+
+  def testBlank(self):
+    """Reject blank values."""
+    self.assertMessageRejected('\nChange-Id:\n')
+    self.assertMessageRejected('\nChange-Id:       \n')
+
+  def testNotFirstLine(self):
+    """Reject the first line."""
+    self.assertMessageRejected('TEST=None\n\n\n')
+
+  def testNotInline(self):
+    """Reject not at the start of line."""
+    self.assertMessageRejected('\n Change-Id: I1234\n')
+    self.assertMessageRejected('\n\tChange-Id: I1234\n')
+
+  def testMissing(self):
+    """Reject commit messages missing the line."""
+    self.assertMessageRejected('foo\n')
+
+  def testCase(self):
+    """Reject bug lines that are not Change-Id."""
+    self.assertMessageRejected('\nchange-id: I1234\n')
+    self.assertMessageRejected('\nChange-id: I1234\n')
+    self.assertMessageRejected('\nChange-ID: I1234\n')
+
+  def testEnd(self):
+    """Reject Change-Id's that are not last."""
+    self.assertMessageRejected('\nChange-Id: I1234\nbar\n')
+
+
 if __name__ == '__main__':
   cros_test_lib.main()

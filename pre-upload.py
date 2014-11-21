@@ -710,8 +710,13 @@ def _check_change_has_proper_changeid(_project, commit):
   CHANGE_ID_RE = r'\nChange-Id: I[a-f0-9]+\n'
   desc = _get_commit_desc(commit)
   m = re.search(CHANGE_ID_RE, desc)
-  if not m or desc[m.end():].strip():
+  if not m:
     return HookFailure('Change-Id must be in last paragraph of description.')
+
+  # Allow s-o-b tags to follow it, but only those.
+  end = desc[m.end():].strip().splitlines()
+  if [x for x in end if not x.startswith('Signed-off-by: ')]:
+    return HookFailure('Only "Signed-off-by:" tags may follow the Change-Id.')
 
 
 def _check_commit_message_style(_project, commit):

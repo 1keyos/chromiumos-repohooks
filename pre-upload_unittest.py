@@ -641,6 +641,10 @@ class CheckCommitMessageChangeId(CommitMessageTestCase):
     """Reject Change-Id's that are not last."""
     self.assertMessageRejected('\nChange-Id: I1234\nbar\n')
 
+  def testSobTag(self):
+    """Permit s-o-b tags to follow the Change-Id."""
+    self.assertMessageAccepted('foo\n\nChange-Id: I1234\nSigned-off-by: Hi\n')
+
 
 class CheckCommitMessageStyle(CommitMessageTestCase):
   """Tests for _check_commit_message_style."""

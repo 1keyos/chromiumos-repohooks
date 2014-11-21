@@ -62,7 +62,7 @@ class CheckNoLongLinesTest(cros_test_lib.MoxTestCase):
          (6, u"See https://" + (u"x" * 80)),  # OK (URL)
          (7, u"#  define " + (u"x" * 80)),    # OK (compiler directive)
          (8, u"#define" + (u"x" * 74)),       # Too long
-         ])
+        ])
     self.mox.ReplayAll()
     failure = pre_upload._check_no_long_lines('PROJECT', 'COMMIT')
     self.assertTrue(failure)
@@ -208,7 +208,7 @@ IUSE="foo"
 src_compile() { }
 """
     ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testRejectExplicitEapi1Content(self):
     """Reject ebuilds that do declare old EAPI explicitly."""
@@ -222,17 +222,17 @@ src_compile() { }
     # Make sure we only check the first EAPI= setting.
     self.content_mock.return_value = template % '1\nEAPI=4'
     ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
     # Verify we handle double quotes too.
     self.content_mock.return_value = template % '"1"'
     ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
     # Verify we handle single quotes too.
     self.content_mock.return_value = template % "'1'"
     ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testAcceptExplicitEapi4Content(self):
     """Accept ebuilds that do declare new EAPI explicitly."""
@@ -297,7 +297,7 @@ class CheckEbuildKeywords(cros_test_lib.MockTestCase):
 
     ret = pre_upload._check_ebuild_keywords('overlay', 'HEAD')
     if fails:
-      self.assertTrue(isinstance (ret, errors.HookFailure))
+      self.assertTrue(isinstance(ret, errors.HookFailure))
     else:
       self.assertEqual(ret, None)
 
@@ -356,7 +356,7 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
 
     self.file_mock.return_value = [template % '2']
     ret = pre_upload._check_ebuild_virtual_pv(self.CHROMIUMOS_OVERLAY, 'H')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testPublicBoardVirtuals(self):
     """Public board overlays should use PV=2."""
@@ -367,7 +367,7 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
 
     self.file_mock.return_value = [template % '2.5']
     ret = pre_upload._check_ebuild_virtual_pv(self.BOARD_OVERLAY, 'H')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testPublicBoardVariantVirtuals(self):
     """Public board variant overlays should use PV=2.5."""
@@ -378,7 +378,7 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
 
     self.file_mock.return_value = [template % '3']
     ret = pre_upload._check_ebuild_virtual_pv(self.BOARD_OVERLAY, 'H')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testPrivateBoardVirtuals(self):
     """Private board overlays should use PV=3."""
@@ -389,7 +389,7 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
 
     self.file_mock.return_value = [template % '3.5']
     ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_OVERLAY, 'H')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testPrivateBoardVariantVirtuals(self):
     """Private board variant overlays should use PV=3.5."""
@@ -400,7 +400,7 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
 
     self.file_mock.return_value = [template % '4']
     ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_VARIANT_OVERLAY, 'H')
-    self.assertTrue(isinstance (ret, errors.HookFailure))
+    self.assertTrue(isinstance(ret, errors.HookFailure))
 
 
 class CheckGitOutputParsing(cros_test_lib.MockTestCase):

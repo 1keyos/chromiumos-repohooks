@@ -752,18 +752,18 @@ def _check_license(_project, commit):
   # For older years, be a bit more flexible as our policy says leave them be.
   LICENSE_HEADER = (
       r'.* Copyright( \(c\))? 20[-0-9]{2,7} The Chromium OS Authors\. '
-          'All rights reserved\.' '\n'
+      r'All rights reserved\.' r'\n'
       r'.* Use of this source code is governed by a BSD-style license that can '
-          'be\n'
+      r'be\n'
       r'.* found in the LICENSE file\.'
-          '\n'
+      r'\n'
   )
   license_re = re.compile(LICENSE_HEADER, re.MULTILINE)
 
   # For newer years, be stricter.
   COPYRIGHT_LINE = (
       r'.* Copyright \(c\) 20(1[5-9]|[2-9][0-9]) The Chromium OS Authors\. '
-          'All rights reserved\.' '\n'
+      r'All rights reserved\.' r'\n'
   )
   copyright_re = re.compile(COPYRIGHT_LINE)
 
@@ -1284,7 +1284,7 @@ def _identify_project(path):
     a blank string upon failure.
   """
   return _run_command(['repo', 'forall', '.', '-c', 'echo ${REPO_PROJECT}'],
-    stderr=subprocess.PIPE, cwd=path).strip()
+                      stderr=subprocess.PIPE, cwd=path).strip()
 
 
 def direct_main(args, verbose=False):

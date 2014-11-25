@@ -24,6 +24,7 @@ if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
 from chromite.lib import cros_test_lib
+from chromite.lib import git
 from chromite.lib import osutils
 
 
@@ -403,31 +404,6 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
 
-class CheckGitOutputParsing(cros_test_lib.MockTestCase):
-  """Tests for git output parsing."""
-
-  def testParseAffectedFiles(self):
-    """Test parsing git diff --raw output."""
-    # Sample from git diff --raw.
-    sample_git_output = '\n'.join([
-        ":100644 100644 ff03961... a198e8b... M\tMakefile",
-        ":100644 000000 e69de29... 0000000... D\tP1/P2",
-        ":100755 100644 454d5ef... 0000000... C86\tP3\tP4",
-        ":100755 100644 454d5ef... 0000000... R86\tP5\tP6/P7",
-        ":100755 120644 454d5ef... 0000000... M\tIsASymlink",
-    ])
-    expected_modified_files_no_deletes = ['Makefile', 'P4', 'P6/P7']
-    expected_modified_files_with_deletes = ['Makefile', 'P1/P2', 'P4', 'P6/P7']
-    result = pre_upload._parse_affected_files(sample_git_output,
-                                              include_deletes=True,
-                                              relative=True)
-    self.assertEqual(result, expected_modified_files_with_deletes)
-    result = pre_upload._parse_affected_files(sample_git_output,
-                                              include_deletes=False,
-                                              relative=True)
-    self.assertEqual(result, expected_modified_files_no_deletes)
-
-
 class CheckLicenseCopyrightHeader(cros_test_lib.MockTestCase):
   """Tests for _check_license."""
 
@@ -670,6 +646,62 @@ class CheckCommitMessageStyle(CommitMessageTestCase):
   def testFirstLineTooLone(self):
     """Reject first lines that are too long."""
     self.assertMessageRejected('o' * 200)
+
+
+class HelpersTest(cros_test_lib.MockTestCase):
+  """Various tests for utility functions."""
+
+  def _SetupGetAffectedFiles(self):
+    self.PatchObject(git, 'RawDiff', return_value=[
+        # A modified normal file.
+        git.RawDiffEntry(src_mode='100644', dst_mode='100644', src_sha='abc',
+                         dst_sha='abc', status='M', score=None,
+                         src_file='buildbot/constants.py', dst_file=None),
+        # A new symlink file.
+        git.RawDiffEntry(src_mode='000000', dst_mode='120000', src_sha='abc',
+                         dst_sha='abc', status='A', score=None,
+                         src_file='scripts/cros_env_whitelist', dst_file=None),
+        # A deleted file.
+        git.RawDiffEntry(src_mode='100644', dst_mode='000000', src_sha='abc',
+                         dst_sha='000000', status='D', score=None,
+                         src_file='scripts/sync_sonic.py', dst_file=None),
+    ])
+
+  def testGetAffectedFilesNoDeletesNoRelative(self):
+    """Verify _get_affected_files() works w/no delete & not relative."""
+    self._SetupGetAffectedFiles()
+    path = os.getcwd()
+    files = pre_upload._get_affected_files('HEAD', include_deletes=False,
+                                           relative=False)
+    exp_files = [os.path.join(path, 'buildbot/constants.py')]
+    self.assertEquals(files, exp_files)
+
+  def testGetAffectedFilesDeletesNoRelative(self):
+    """Verify _get_affected_files() works w/delete & not relative."""
+    self._SetupGetAffectedFiles()
+    path = os.getcwd()
+    files = pre_upload._get_affected_files('HEAD', include_deletes=True,
+                                           relative=False)
+    exp_files = [os.path.join(path, 'buildbot/constants.py'),
+                 os.path.join(path, 'scripts/sync_sonic.py')]
+    self.assertEquals(files, exp_files)
+
+  def testGetAffectedFilesNoDeletesRelative(self):
+    """Verify _get_affected_files() works w/no delete & relative."""
+    self._SetupGetAffectedFiles()
+    files = pre_upload._get_affected_files('HEAD', include_deletes=False,
+                                           relative=True)
+    exp_files = ['buildbot/constants.py']
+    self.assertEquals(files, exp_files)
+
+  def testGetAffectedFilesDeletesRelative(self):
+    """Verify _get_affected_files() works w/delete & relative."""
+    self._SetupGetAffectedFiles()
+    path = os.getcwd()
+    files = pre_upload._get_affected_files('HEAD', include_deletes=True,
+                                           relative=True)
+    exp_files = ['buildbot/constants.py', 'scripts/sync_sonic.py']
+    self.assertEquals(files, exp_files)
 
 
 if __name__ == '__main__':

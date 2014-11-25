@@ -17,8 +17,8 @@ import optparse
 import os
 import re
 import sys
-import subprocess
 import stat
+import subprocess
 
 from errors import (VerifyException, HookFailure, PrintErrorForProject,
                     PrintErrorsForCommit)
@@ -29,6 +29,7 @@ from errors import (VerifyException, HookFailure, PrintErrorForProject,
 if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
+from chromite.lib import git
 from chromite.lib import osutils
 from chromite.lib import patch
 from chromite.licensing import licenses_lib
@@ -239,45 +240,6 @@ def _get_file_diff(path, commit):
   return new_lines
 
 
-def _parse_affected_files(output, include_deletes=False, relative=False):
-  """Parses git diff's 'raw' format, returning a list of modified file paths.
-
-  This excludes directories and symlinks, and optionally includes files that
-  were deleted.
-
-  Args:
-    output: The result of the 'git diff --raw' command
-    include_deletes: If true, we'll include deleted files in the result
-    relative: Whether to return relative or full paths to files
-
-  Returns:
-    A list of modified/added (and perhaps deleted) files
-  """
-  files = []
-  # See the documentation for 'git diff --raw' for the relevant format.
-  for statusline in output.splitlines():
-    attributes, paths = statusline.split('\t', 1)
-    _, mode, _, _, status = attributes.split(' ')
-
-    # Ignore symlinks and directories.
-    imode = int(mode, 8)
-    if stat.S_ISDIR(imode) or stat.S_ISLNK(imode):
-      continue
-
-    # Ignore deleted files, and optionally return absolute paths of files.
-    if include_deletes or status != 'D':
-      # If a file was merely modified, we will have a single file path.
-      # If it was moved, we will have two paths (source and destination).
-      # In either case, we want the last path.
-      f = paths.split('\t')[-1]
-      if not relative:
-        pwd = os.getcwd()
-        f = os.path.join(pwd, f)
-      files.append(f)
-
-  return files
-
-
 def _get_affected_files(commit, include_deletes=False, relative=False):
   """Returns list of file paths that were modified/added, excluding symlinks.
 
@@ -292,8 +254,22 @@ def _get_affected_files(commit, include_deletes=False, relative=False):
   if commit == PRE_SUBMIT:
     return _run_command(['git', 'diff-index', '--cached',
                          '--name-only', 'HEAD']).split()
-  output = _run_command(['git', 'diff', '--raw', commit + '^!'])
-  return _parse_affected_files(output, include_deletes, relative)
+
+  path = os.getcwd()
+  files = git.RawDiff(path, '%s^!' % commit)
+
+  # Filter out symlinks.
+  files = [x for x in files if not stat.S_ISLNK(int(x.dst_mode, 8))]
+
+  if not include_deletes:
+    files = [x for x in files if x.status != 'D']
+
+  # Caller only cares about filenames.
+  files = [x.dst_file if x.dst_file else x.src_file for x in files]
+  if relative:
+    return files
+  else:
+    return [os.path.join(path, x) for x in files]
 
 
 def _get_commits():

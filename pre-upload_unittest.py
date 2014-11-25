@@ -640,23 +640,41 @@ class CheckCommitMessageStyle(CommitMessageTestCase):
     self.assertMessageRejected('o' * 200)
 
 
+def DiffEntry(src_file=None, dst_file=None, src_mode=None, dst_mode='100644',
+              status='M'):
+  """Helper to create a stub RawDiffEntry object"""
+  if src_mode is None:
+    if status == 'A':
+      src_mode = '000000'
+    elif status == 'M':
+      src_mode = dst_mode
+    elif status == 'D':
+      src_mode = dst_mode
+      dst_mode = '000000'
+
+  src_sha = dst_sha = 'abc'
+  if status == 'D':
+    dst_sha = '000000'
+  elif status == 'A':
+    src_sha = '000000'
+
+  return git.RawDiffEntry(src_mode=src_mode, dst_mode=dst_mode, src_sha=src_sha,
+                          dst_sha=dst_sha, status=status, score=None,
+                          src_file=src_file, dst_file=dst_file)
+
+
 class HelpersTest(cros_test_lib.MockTestCase):
   """Various tests for utility functions."""
 
   def _SetupGetAffectedFiles(self):
     self.PatchObject(git, 'RawDiff', return_value=[
         # A modified normal file.
-        git.RawDiffEntry(src_mode='100644', dst_mode='100644', src_sha='abc',
-                         dst_sha='abc', status='M', score=None,
-                         src_file='buildbot/constants.py', dst_file=None),
+        DiffEntry(src_file='buildbot/constants.py', status='M'),
         # A new symlink file.
-        git.RawDiffEntry(src_mode='000000', dst_mode='120000', src_sha='abc',
-                         dst_sha='abc', status='A', score=None,
-                         src_file='scripts/cros_env_whitelist', dst_file=None),
+        DiffEntry(dst_file='scripts/cros_env_whitelist', dst_mode='120000',
+                  status='A'),
         # A deleted file.
-        git.RawDiffEntry(src_mode='100644', dst_mode='000000', src_sha='abc',
-                         dst_sha='000000', status='D', score=None,
-                         src_file='scripts/sync_sonic.py', dst_file=None),
+        DiffEntry(src_file='scripts/sync_sonic.py', status='D'),
     ])
 
   def testGetAffectedFilesNoDeletesNoRelative(self):
@@ -689,11 +707,90 @@ class HelpersTest(cros_test_lib.MockTestCase):
   def testGetAffectedFilesDeletesRelative(self):
     """Verify _get_affected_files() works w/delete & relative."""
     self._SetupGetAffectedFiles()
-    path = os.getcwd()
     files = pre_upload._get_affected_files('HEAD', include_deletes=True,
                                            relative=True)
     exp_files = ['buildbot/constants.py', 'scripts/sync_sonic.py']
     self.assertEquals(files, exp_files)
+
+  def testGetAffectedFilesDetails(self):
+    """Verify _get_affected_files() works w/full_details."""
+    self._SetupGetAffectedFiles()
+    files = pre_upload._get_affected_files('HEAD', full_details=True,
+                                           relative=True)
+    self.assertEquals(files[0].src_file, 'buildbot/constants.py')
+
+
+class CheckForUprev(cros_test_lib.MockTempDirTestCase):
+  """Tests for _check_for_uprev."""
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(git, 'RawDiff')
+
+  def _Files(self, files):
+    """Create |files| in the tempdir and return full paths to them."""
+    for obj in files:
+      if obj.status == 'D':
+        continue
+      if obj.dst_file is None:
+        f = obj.src_file
+      else:
+        f = obj.dst_file
+      osutils.Touch(os.path.join(self.tempdir, f), makedirs=True)
+    return files
+
+  def assertAccepted(self, files, project='project', commit='fake sha1'):
+    """Assert _check_for_uprev accepts |files|."""
+    self.file_mock.return_value = self._Files(files)
+    ret = pre_upload._check_for_uprev(project, commit, project_top=self.tempdir)
+    self.assertEqual(ret, None)
+
+  def assertRejected(self, files, project='project', commit='fake sha1'):
+    """Assert _check_for_uprev rejects |files|."""
+    self.file_mock.return_value = self._Files(files)
+    ret = pre_upload._check_for_uprev(project, commit, project_top=self.tempdir)
+    self.assertTrue(isinstance(ret, errors.HookFailure))
+
+  def testWhitelistOverlay(self):
+    """Skip checks on whitelisted overlays."""
+    self.assertAccepted([DiffEntry(src_file='cat/pkg/pkg-0.ebuild')],
+                        project='chromiumos/overlays/portage-stable')
+
+  def testWhitelistFiles(self):
+    """Skip checks on whitelisted files."""
+    files = ['ChangeLog', 'Manifest', 'metadata.xml']
+    self.assertAccepted([DiffEntry(src_file=os.path.join('c', 'p', x),
+                                   status='M')
+                         for x in files])
+
+  def testRejectBasic(self):
+    """Reject ebuilds missing uprevs."""
+    self.assertRejected([DiffEntry(src_file='c/p/p-0.ebuild', status='M')])
+
+  def testNewPackage(self):
+    """Accept new ebuilds w/out uprevs."""
+    self.assertAccepted([DiffEntry(src_file='c/p/p-0.ebuild', status='A')])
+    self.assertAccepted([DiffEntry(src_file='c/p/p-0-r12.ebuild', status='A')])
+
+  def testModifiedFilesOnly(self):
+    """Reject ebuilds w/out uprevs and changes in files/."""
+    osutils.Touch(os.path.join(self.tempdir, 'cat/pkg/pkg-0.ebuild'),
+                  makedirs=True)
+    self.assertRejected([DiffEntry(src_file='cat/pkg/files/f', status='A')])
+    self.assertRejected([DiffEntry(src_file='cat/pkg/files/g', status='M')])
+
+  def testFilesNoEbuilds(self):
+    """Ignore changes to paths w/out ebuilds."""
+    self.assertAccepted([DiffEntry(src_file='cat/pkg/files/f', status='A')])
+    self.assertAccepted([DiffEntry(src_file='cat/pkg/files/g', status='M')])
+
+  def testModifiedFilesWithUprev(self):
+    """Accept ebuilds w/uprevs and changes in files/."""
+    self.assertAccepted([DiffEntry(src_file='c/p/files/f', status='A'),
+                         DiffEntry(src_file='c/p/p-0.ebuild', status='A')])
+    self.assertAccepted([
+        DiffEntry(src_file='c/p/files/f', status='M'),
+        DiffEntry(src_file='c/p/p-0-r1.ebuild', src_mode='120000',
+                  dst_file='c/p/p-0-r2.ebuild', dst_mode='120000', status='R')])
 
 
 if __name__ == '__main__':

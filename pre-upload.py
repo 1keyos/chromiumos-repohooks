@@ -240,17 +240,25 @@ def _get_file_diff(path, commit):
   return new_lines
 
 
-def _get_affected_files(commit, include_deletes=False, relative=False):
+def _get_affected_files(commit, include_deletes=False, relative=False,
+                        include_symlinks=False, include_adds=True,
+                        full_details=False):
   """Returns list of file paths that were modified/added, excluding symlinks.
 
   Args:
     commit: The commit
     include_deletes: If true, we'll include deleted files in the result
     relative: Whether to return relative or full paths to files
+    include_symlinks: If true, we'll include symlinks in the result
+    include_adds: If true, we'll include new files in the result
+    full_details: If False, return filenames, else return structured results.
 
   Returns:
     A list of modified/added (and perhaps deleted) files
   """
+  if not relative and full_details:
+    raise ValueError('full_details only supports relative paths currently')
+
   if commit == PRE_SUBMIT:
     return _run_command(['git', 'diff-index', '--cached',
                          '--name-only', 'HEAD']).split()
@@ -259,17 +267,25 @@ def _get_affected_files(commit, include_deletes=False, relative=False):
   files = git.RawDiff(path, '%s^!' % commit)
 
   # Filter out symlinks.
-  files = [x for x in files if not stat.S_ISLNK(int(x.dst_mode, 8))]
+  if not include_symlinks:
+    files = [x for x in files if not stat.S_ISLNK(int(x.dst_mode, 8))]
 
   if not include_deletes:
     files = [x for x in files if x.status != 'D']
 
-  # Caller only cares about filenames.
-  files = [x.dst_file if x.dst_file else x.src_file for x in files]
-  if relative:
+  if not include_adds:
+    files = [x for x in files if x.status != 'A']
+
+  if full_details:
+    # Caller wants the raw objects to parse status/etc... themselves.
     return files
   else:
-    return [os.path.join(path, x) for x in files]
+    # Caller only cares about filenames.
+    files = [x.dst_file if x.dst_file else x.src_file for x in files]
+    if relative:
+      return files
+    else:
+      return [os.path.join(path, x) for x in files]
 
 
 def _get_commits():
@@ -390,7 +406,7 @@ def _check_change_has_bug_field(_project, commit):
     return HookFailure(msg)
 
 
-def _check_for_uprev(project, commit):
+def _check_for_uprev(project, commit, project_top=None):
   """Check that we're not missing a revbump of an ebuild in the given commit.
 
   If the given commit touches files in a directory that has ebuilds somewhere
@@ -415,6 +431,7 @@ def _check_for_uprev(project, commit):
   Args:
     project: The project to look at
     commit: The commit to look at
+    project_top: Top dir to process commits in
 
   Returns:
     A HookFailure or None.
@@ -428,21 +445,40 @@ def _check_for_uprev(project, commit):
   if project in whitelist:
     return None
 
-  affected_paths = _get_affected_files(commit, include_deletes=True)
+  def FinalName(obj):
+    # If the file is being deleted, then the dst_file is not set.
+    if obj.dst_file is None:
+      return obj.src_file
+    else:
+      return obj.dst_file
+
+  affected_path_objs = _get_affected_files(
+      commit, include_deletes=True, include_symlinks=True, relative=True,
+      full_details=True)
 
   # Don't yell about changes to whitelisted files...
   whitelist = ('ChangeLog', 'Manifest', 'metadata.xml')
-  affected_paths = [path for path in affected_paths
-                    if os.path.basename(path) not in whitelist]
-  if not affected_paths:
+  affected_path_objs = [x for x in affected_path_objs
+                        if os.path.basename(FinalName(x)) not in whitelist]
+  if not affected_path_objs:
     return None
 
   # If we've touched any file named with a -rN.ebuild then we'll say we're
   # OK right away.  See TODO above about enhancing this.
-  touched_revved_ebuild = any(re.search(r'-r\d*\.ebuild$', path)
-                              for path in affected_paths)
+  touched_revved_ebuild = any(re.search(r'-r\d*\.ebuild$', FinalName(x))
+                              for x in affected_path_objs)
   if touched_revved_ebuild:
     return None
+
+  # If we're creating new ebuilds from scratch, then we don't need an uprev.
+  # Find all the dirs that new ebuilds and ignore their files/.
+  ebuild_dirs = [os.path.dirname(FinalName(x)) + '/' for x in affected_path_objs
+                 if FinalName(x).endswith('.ebuild') and x.status == 'A']
+  affected_path_objs = [obj for obj in affected_path_objs
+                        if not any(FinalName(obj).startswith(x)
+                                   for x in ebuild_dirs)]
+  if not affected_path_objs:
+    return
 
   # We want to examine the current contents of all directories that are parents
   # of files that were touched (up to the top of the project).
@@ -450,16 +486,18 @@ def _check_for_uprev(project, commit):
   # ...note: we use the current directory contents even though it may have
   # changed since the commit we're looking at.  This is just a heuristic after
   # all.  Worst case we don't flag a missing revbump.
-  project_top = os.getcwd()
+  if project_top is None:
+    project_top = os.getcwd()
   dirs_to_check = set([project_top])
-  for path in affected_paths:
-    path = os.path.dirname(path)
+  for obj in affected_path_objs:
+    path = os.path.join(project_top, os.path.dirname(FinalName(obj)))
     while os.path.exists(path) and not os.path.samefile(path, project_top):
       dirs_to_check.add(path)
       path = os.path.dirname(path)
 
   # Look through each directory.  If it's got an ebuild in it then we'll
   # consider this as a case when we need a revbump.
+  affected_paths = set([FinalName(x) for x in affected_path_objs])
   for dir_path in dirs_to_check:
     contents = os.listdir(dir_path)
     ebuilds = [os.path.join(dir_path, path)
@@ -468,12 +506,13 @@ def _check_for_uprev(project, commit):
 
     # If the -9999.ebuild file was touched the bot will uprev for us.
     # ...we'll use a simple intersection here as a heuristic...
-    if set(ebuilds_9999) & set(affected_paths):
+    if set(ebuilds_9999) & affected_paths:
       continue
 
     if ebuilds:
-      return HookFailure('Changelist probably needs a revbump of an ebuild\n'
-                         'or a -r1.ebuild symlink if this is a new ebuild')
+      return HookFailure('Changelist probably needs a revbump of an ebuild, '
+                         'or a -r1.ebuild symlink if this is a new ebuild:\n'
+                         '%s' % dir_path)
 
   return None
 

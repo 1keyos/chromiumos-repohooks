@@ -8,7 +8,6 @@
 
 from __future__ import print_function
 
-import mox
 import os
 import sys
 
@@ -42,29 +41,25 @@ class TryUTF8DecodeTest(cros_test_lib.TestCase):
     self.assertEquals('\x80', pre_upload._try_utf8_decode('\x80'))
 
 
-class CheckNoLongLinesTest(cros_test_lib.MoxTestCase):
+class CheckNoLongLinesTest(cros_test_lib.MockTestCase):
   """Tests for _check_no_long_lines."""
 
   def setUp(self):
-    self.mox.StubOutWithMock(pre_upload, '_filter_files')
-    self.mox.StubOutWithMock(pre_upload, '_get_affected_files')
-    self.mox.StubOutWithMock(pre_upload, '_get_file_diff')
-    pre_upload._get_affected_files(mox.IgnoreArg()).AndReturn(['x.py'])
-    pre_upload._filter_files(
-        ['x.py'], mox.IgnoreArg(), mox.IgnoreArg()).AndReturn(['x.py'])
+    self.PatchObject(pre_upload, '_get_affected_files', return_value=['x.py'])
+    self.PatchObject(pre_upload, '_filter_files', return_value=['x.py'])
+    self.diff_mock = self.PatchObject(pre_upload, '_get_file_diff')
 
   def runTest(self):
-    pre_upload._get_file_diff(mox.IgnoreArg(), mox.IgnoreArg()).AndReturn(
-        [(1, u"x" * 80),                      # OK
-         (2, "\x80" * 80),                    # OK
-         (3, u"x" * 81),                      # Too long
-         (4, "\x80" * 81),                    # Too long
-         (5, u"See http://" + (u"x" * 80)),   # OK (URL)
-         (6, u"See https://" + (u"x" * 80)),  # OK (URL)
-         (7, u"#  define " + (u"x" * 80)),    # OK (compiler directive)
-         (8, u"#define" + (u"x" * 74)),       # Too long
-        ])
-    self.mox.ReplayAll()
+    self.diff_mock.return_value = [
+        (1, u"x" * 80),                      # OK
+        (2, "\x80" * 80),                    # OK
+        (3, u"x" * 81),                      # Too long
+        (4, "\x80" * 81),                    # Too long
+        (5, u"See http://" + (u"x" * 80)),   # OK (URL)
+        (6, u"See https://" + (u"x" * 80)),  # OK (URL)
+        (7, u"#  define " + (u"x" * 80)),    # OK (compiler directive)
+        (8, u"#define" + (u"x" * 74)),       # Too long
+    ]
     failure = pre_upload._check_no_long_lines('PROJECT', 'COMMIT')
     self.assertTrue(failure)
     self.assertEquals('Found lines longer than 80 characters (first 5 shown):',
@@ -125,38 +120,35 @@ class CheckProjectPrefix(cros_test_lib.MockTempDirTestCase):
     self.assertFalse(pre_upload._check_project_prefix('PROJECT', 'COMMIT'))
 
 
-class CheckKernelConfig(cros_test_lib.MoxTestCase):
+class CheckKernelConfig(cros_test_lib.MockTestCase):
   """Tests for _kernel_configcheck."""
 
-  def runTest(self):
-    # Mixed changes, should fail
-    self.mox.StubOutWithMock(pre_upload, '_get_affected_files')
-    pre_upload._get_affected_files(mox.IgnoreArg()).AndReturn(
-        ['/kernel/files/chromeos/config/base.config',
-         '/kernel/files/arch/arm/mach-exynos/mach-exynos5-dt.c'
-        ])
-    self.mox.ReplayAll()
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+
+  def testMixedChanges(self):
+    """Mixing of changes should fail."""
+    self.file_mock.return_value = [
+        '/kernel/files/chromeos/config/base.config',
+        '/kernel/files/arch/arm/mach-exynos/mach-exynos5-dt.c'
+    ]
     failure = pre_upload._kernel_configcheck('PROJECT', 'COMMIT')
     self.assertTrue(failure)
 
-    # Code-only changes, should pass
-    self.mox.UnsetStubs()
-    self.mox.StubOutWithMock(pre_upload, '_get_affected_files')
-    pre_upload._get_affected_files(mox.IgnoreArg()).AndReturn(
-        ['/kernel/files/Makefile',
-         '/kernel/files/arch/arm/mach-exynos/mach-exynos5-dt.c'
-        ])
-    self.mox.ReplayAll()
+  def testCodeOnly(self):
+    """Code-only changes should pass."""
+    self.file_mock.return_value = [
+        '/kernel/files/Makefile',
+        '/kernel/files/arch/arm/mach-exynos/mach-exynos5-dt.c'
+    ]
     failure = pre_upload._kernel_configcheck('PROJECT', 'COMMIT')
     self.assertFalse(failure)
 
-    # Config-only changes, should pass
-    self.mox.UnsetStubs()
-    self.mox.StubOutWithMock(pre_upload, '_get_affected_files')
-    pre_upload._get_affected_files(mox.IgnoreArg()).AndReturn(
-        ['/kernel/files/chromeos/config/base.config',
-        ])
-    self.mox.ReplayAll()
+  def testConfigOnlyChanges(self):
+    """Config-only changes should pass."""
+    self.file_mock.return_value = [
+        '/kernel/files/chromeos/config/base.config',
+    ]
     failure = pre_upload._kernel_configcheck('PROJECT', 'COMMIT')
     self.assertFalse(failure)
 

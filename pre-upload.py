@@ -497,7 +497,8 @@ def _check_for_uprev(project, commit, project_top=None):
 
   # Look through each directory.  If it's got an ebuild in it then we'll
   # consider this as a case when we need a revbump.
-  affected_paths = set([FinalName(x) for x in affected_path_objs])
+  affected_paths = set(os.path.join(project_top, FinalName(x))
+                       for x in affected_path_objs)
   for dir_path in dirs_to_check:
     contents = os.listdir(dir_path)
     ebuilds = [os.path.join(dir_path, path)

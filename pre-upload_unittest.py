@@ -792,6 +792,11 @@ class CheckForUprev(cros_test_lib.MockTempDirTestCase):
         DiffEntry(src_file='c/p/p-0-r1.ebuild', src_mode='120000',
                   dst_file='c/p/p-0-r2.ebuild', dst_mode='120000', status='R')])
 
+  def testModifiedFilesWith9999(self):
+    """Accept 9999 ebuilds and changes in files/."""
+    self.assertAccepted([DiffEntry(src_file='c/p/files/f', status='M'),
+                         DiffEntry(src_file='c/p/p-9999.ebuild', status='M')])
+
 
 if __name__ == '__main__':
   cros_test_lib.main()

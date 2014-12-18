@@ -13,7 +13,6 @@ from __future__ import print_function
 import ConfigParser
 import functools
 import json
-import optparse
 import os
 import re
 import sys
@@ -29,6 +28,7 @@ from errors import (VerifyException, HookFailure, PrintErrorForProject,
 if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
+from chromite.lib import commandline
 from chromite.lib import git
 from chromite.lib import osutils
 from chromite.lib import patch
@@ -1312,37 +1312,34 @@ def direct_main(argv):
   Raises:
     BadInvocation: On some types of invocation errors.
   """
-  desc = 'Run Chromium OS pre-upload hooks on changes compared to upstream.'
-  parser = optparse.OptionParser(description=desc)
-
-  parser.add_option('--dir', default=None,
-                    help='The directory that the project lives in.  If not '
-                    'specified, use the git project root based on the cwd.')
-  parser.add_option('--project', default=None,
-                    help='The project repo path; this can affect how the hooks '
-                    'get run, since some hooks are project-specific.  For '
-                    'chromite this is chromiumos/chromite.  If not specified, '
-                    'the repo tool will be used to figure this out based on '
-                    'the dir.')
-  parser.add_option('--rerun-since', default=None,
-                    help='Rerun hooks on old commits since the given date.  '
-                    'The date should match git log\'s concept of a date.  '
-                    'e.g. 2012-06-20. This option is mutually exclusive '
-                    'with --pre-submit.')
-  parser.add_option('--pre-submit', action="store_true",
-                    help='Run the check against the pending commit.  '
-                    'This option should be used at the \'git commit\' '
-                    'phase as opposed to \'repo upload\'. This option '
-                    'is mutually exclusive with --rerun-since.')
-
-  parser.usage = "pre-upload.py [options] [commits]"
-
-  opts, args = parser.parse_args(argv)
+  parser = commandline.ArgumentParser(description=__doc__)
+  parser.add_argument('--dir', default=None,
+                      help='The directory that the project lives in.  If not '
+                      'specified, use the git project root based on the cwd.')
+  parser.add_argument('--project', default=None,
+                      help='The project repo path; this can affect how the '
+                      'hooks get run, since some hooks are project-specific.  '
+                      'For chromite this is chromiumos/chromite.  If not '
+                      'specified, the repo tool will be used to figure this '
+                      'out based on the dir.')
+  parser.add_argument('--rerun-since', default=None,
+                      help='Rerun hooks on old commits since the given date.  '
+                      'The date should match git log\'s concept of a date.  '
+                      'e.g. 2012-06-20. This option is mutually exclusive '
+                      'with --pre-submit.')
+  parser.add_argument('--pre-submit', action="store_true",
+                      help='Run the check against the pending commit.  '
+                      'This option should be used at the \'git commit\' '
+                      'phase as opposed to \'repo upload\'. This option '
+                      'is mutually exclusive with --rerun-since.')
+  parser.add_argument('commits', nargs='*',
+                      help='Check specific commits')
+  opts = parser.parse_args(argv)
 
   if opts.rerun_since:
-    if args:
+    if opts.commits:
       raise BadInvocation('Can\'t pass commits and use rerun-since: %s' %
-                          ' '.join(args))
+                          ' '.join(opts.commits))
 
     cmd = ['git', 'log', '--since="%s"' % opts.rerun_since, '--pretty=%H']
     all_commits = _run_command(cmd).splitlines()
@@ -1350,16 +1347,16 @@ def direct_main(argv):
 
     # Eliminate chrome-bot commits but keep ordering the same...
     bot_commits = set(bot_commits)
-    args = [c for c in all_commits if c not in bot_commits]
+    opts.commits = [c for c in all_commits if c not in bot_commits]
 
     if opts.pre_submit:
       raise BadInvocation('rerun-since and pre-submit can not be '
                           'used together')
   if opts.pre_submit:
-    if args:
+    if opts.commits:
       raise BadInvocation('Can\'t pass commits and use pre-submit: %s' %
-                          ' '.join(args))
-    args = [PRE_SUBMIT,]
+                          ' '.join(opts.commits))
+    opts.commits = [PRE_SUBMIT,]
 
   # Check/normlaize git dir; if unspecified, we'll use the root of the git
   # project from CWD
@@ -1382,7 +1379,7 @@ def direct_main(argv):
       raise BadInvocation("Repo couldn't identify the project of %s" % opts.dir)
 
   found_error = _run_project_hooks(opts.project, proj_dir=opts.dir,
-                                   commit_list=args,
+                                   commit_list=opts.commits,
                                    presubmit=opts.pre_submit)
   if found_error:
     return 1

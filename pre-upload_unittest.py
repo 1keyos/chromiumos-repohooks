@@ -16,15 +16,18 @@ import errors
 # pylint: disable=W0212
 # We access private members of the pre_upload module all over the place.
 
-# If repo imports us, the __name__ will be __builtin__, and the wrapper will
-# be in $CHROMEOS_CHECKOUT/.repo/repo/main.py, so we need to go two directories
-# up. The same logic also happens to work if we're executed directly.
-if __name__ in ('__builtin__', '__main__'):
-  sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
+# Make sure we can find the chromite paths.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                '..', '..'))
 
+from chromite.cbuildbot import constants
+from chromite.lib import cros_build_lib
 from chromite.lib import cros_test_lib
 from chromite.lib import git
 from chromite.lib import osutils
+
+# Needs to be after chromite imports so we use the bundled copy.
+import mock
 
 
 pre_upload = __import__('pre-upload')
@@ -36,7 +39,7 @@ class TryUTF8DecodeTest(cros_test_lib.TestCase):
   def runTest(self):
     self.assertEquals(u'', pre_upload._try_utf8_decode(''))
     self.assertEquals(u'abc', pre_upload._try_utf8_decode('abc'))
-    self.assertEquals(u'你好布萊恩', pre_upload._try_utf8_decode('你好布萊恩'))
+    self.assertEquals(u'ä½ å¥½å¸èæ©', pre_upload._try_utf8_decode('ä½ å¥½å¸èæ©'))
     # Invalid UTF-8
     self.assertEquals('\x80', pre_upload._try_utf8_decode('\x80'))
 
@@ -796,6 +799,66 @@ class CheckForUprev(cros_test_lib.MockTempDirTestCase):
     """Accept 9999 ebuilds and changes in files/."""
     self.assertAccepted([DiffEntry(src_file='c/p/files/f', status='M'),
                          DiffEntry(src_file='c/p/p-9999.ebuild', status='M')])
+
+
+class DirectMainTest(cros_test_lib.MockTempDirTestCase):
+  """Tests for direct_main()"""
+
+  def setUp(self):
+    self.hooks_mock = self.PatchObject(pre_upload, '_run_project_hooks',
+                                       return_value=None)
+
+  def testNoArgs(self):
+    """If run w/no args, should check the current dir."""
+    ret = pre_upload.direct_main([])
+    self.assertEqual(ret, 0)
+    self.hooks_mock.assert_called_once_with(
+        mock.ANY, proj_dir=os.getcwd(), commit_list=[], presubmit=mock.ANY)
+
+  def testExplicitDir(self):
+    """Verify we can run on a diff dir."""
+    # Use the chromite dir since we know it exists.
+    ret = pre_upload.direct_main(['--dir', constants.CHROMITE_DIR])
+    self.assertEqual(ret, 0)
+    self.hooks_mock.assert_called_once_with(
+        mock.ANY, proj_dir=constants.CHROMITE_DIR, commit_list=[],
+        presubmit=mock.ANY)
+
+  def testBogusProject(self):
+    """A bogus project name should be fine (use default settings)."""
+    # Use the chromite dir since we know it exists.
+    ret = pre_upload.direct_main(['--dir', constants.CHROMITE_DIR,
+                                  '--project', 'foooooooooo'])
+    self.assertEqual(ret, 0)
+    self.hooks_mock.assert_called_once_with(
+        'foooooooooo', proj_dir=constants.CHROMITE_DIR, commit_list=[],
+        presubmit=mock.ANY)
+
+  def testBogustProjectNoDir(self):
+    """Make sure --dir is detected even with --project."""
+    ret = pre_upload.direct_main(['--project', 'foooooooooo'])
+    self.assertEqual(ret, 0)
+    self.hooks_mock.assert_called_once_with(
+        'foooooooooo', proj_dir=os.getcwd(), commit_list=[],
+        presubmit=mock.ANY)
+
+  def testNoGitDir(self):
+    """We should die when run on a non-git dir."""
+    self.assertRaises(pre_upload.BadInvocation, pre_upload.direct_main,
+                      ['--dir', self.tempdir])
+
+  def testNoDir(self):
+    """We should die when run on a missing dir."""
+    self.assertRaises(pre_upload.BadInvocation, pre_upload.direct_main,
+                      ['--dir', os.path.join(self.tempdir, 'foooooooo')])
+
+  def testCommitList(self):
+    """Any args on the command line should be treated as commits."""
+    commits = ['sha1', 'sha2', 'shaaaaaaaaaaaan']
+    ret = pre_upload.direct_main(commits)
+    self.assertEqual(ret, 0)
+    self.hooks_mock.assert_called_once_with(
+        mock.ANY, proj_dir=mock.ANY, commit_list=commits, presubmit=mock.ANY)
 
 
 if __name__ == '__main__':

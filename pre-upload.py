@@ -305,9 +305,8 @@ def _get_commit_desc(commit):
 
 
 def _check_no_long_lines(_project, commit):
-  """Checks that there aren't any lines longer than maxlen characters in any of
-  the text files to be submitted.
-  """
+  """Checks there are no lines longer than MAX_LEN in any of the text files."""
+
   MAX_LEN = 80
   SKIP_REGEXP = re.compile('|'.join([
       r'https?://',
@@ -1020,9 +1019,7 @@ def _moved_to_platform2(project, _commit):
 
 
 def _check_project_prefix(_project, commit):
-  """Fails if the change is project specific and the commit message is not
-  prefixed by the project_name.
-  """
+  """Require the commit message have a project specific prefix as needed."""
 
   files = _get_affected_files(commit, relative=True)
   prefix = os.path.commonprefix(files)
@@ -1303,63 +1300,11 @@ def _identify_project(path):
                       stderr=subprocess.PIPE, cwd=path).strip()
 
 
-def direct_main(args, verbose=False):
+def direct_main(argv):
   """Run hooks directly (outside of the context of repo).
 
-  # Setup for doctests below.
-  # ...note that some tests assume that running pre-upload on this CWD is fine.
-  # TODO: Use mock and actually mock out _run_project_hooks() for tests.
-  >>> mydir = os.path.dirname(os.path.abspath(__file__))
-  >>> olddir = os.getcwd()
-
-  # OK to run w/ no arugments; will run with CWD.
-  >>> os.chdir(mydir)
-  >>> direct_main(['prog_name'], verbose=True)
-  Running hooks on chromiumos/repohooks
-  0
-  >>> os.chdir(olddir)
-
-  # Run specifying a dir
-  >>> direct_main(['prog_name', '--dir=%s' % mydir], verbose=True)
-  Running hooks on chromiumos/repohooks
-  0
-
-  # Not a problem to use a bogus project; we'll just get default settings.
-  >>> direct_main(['prog_name', '--dir=%s' % mydir, '--project=X'],verbose=True)
-  Running hooks on X
-  0
-
-  # Run with project but no dir
-  >>> os.chdir(mydir)
-  >>> direct_main(['prog_name', '--project=X'], verbose=True)
-  Running hooks on X
-  0
-  >>> os.chdir(olddir)
-
-  # Try with a non-git CWD
-  >>> os.chdir('/tmp')
-  >>> direct_main(['prog_name'])
-  Traceback (most recent call last):
-    ...
-  BadInvocation: The current directory is not part of a git project.
-
-  # Check various bad arguments...
-  >>> direct_main(['prog_name', 'bogus'])
-  Traceback (most recent call last):
-    ...
-  BadInvocation: Unexpected arguments: bogus
-  >>> direct_main(['prog_name', '--project=bogus', '--dir=bogusdir'])
-  Traceback (most recent call last):
-    ...
-  BadInvocation: Invalid dir: bogusdir
-  >>> direct_main(['prog_name', '--project=bogus', '--dir=/tmp'])
-  Traceback (most recent call last):
-    ...
-  BadInvocation: Not a git directory: /tmp
-
   Args:
-    args: The value of sys.argv
-    verbose: Log verbose info while running
+    argv: The command line args to process
 
   Returns:
     0 if no pre-upload failures, 1 if failures.
@@ -1392,7 +1337,7 @@ def direct_main(args, verbose=False):
 
   parser.usage = "pre-upload.py [options] [commits]"
 
-  opts, args = parser.parse_args(args[1:])
+  opts, args = parser.parse_args(argv)
 
   if opts.rerun_since:
     if args:
@@ -1436,9 +1381,6 @@ def direct_main(args, verbose=False):
     if not opts.project:
       raise BadInvocation("Repo couldn't identify the project of %s" % opts.dir)
 
-  if verbose:
-    print("Running hooks on %s" % (opts.project))
-
   found_error = _run_project_hooks(opts.project, proj_dir=opts.dir,
                                    commit_list=args,
                                    presubmit=opts.pre_submit)
@@ -1447,21 +1389,5 @@ def direct_main(args, verbose=False):
   return 0
 
 
-def _test():
-  """Run any built-in tests."""
-  import doctest
-  doctest.testmod()
-
-
 if __name__ == '__main__':
-  if sys.argv[1:2] == ["--test"]:
-    _test()
-    exit_code = 0
-  else:
-    prog_name = os.path.basename(sys.argv[0])
-    try:
-      exit_code = direct_main(sys.argv)
-    except BadInvocation, err:
-      print("%s: %s" % (prog_name, str(err)), file=sys.stderr)
-      exit_code = 1
-  sys.exit(exit_code)
+  sys.exit(direct_main(sys.argv[1:]))

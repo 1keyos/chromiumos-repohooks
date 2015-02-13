@@ -11,6 +11,7 @@ You can add new checks by adding a functions to the HOOKS constants.
 from __future__ import print_function
 
 import ConfigParser
+import fnmatch
 import functools
 import json
 import os
@@ -51,7 +52,7 @@ COMMON_INCLUDED_PATHS = [
 
 
 COMMON_EXCLUDED_PATHS = [
-    # avoid doing source file checks for kernel
+    # Avoid doing source file checks for kernel.
     r"/src/third_party/kernel/",
     r"/src/third_party/kernel-next/",
     r"/src/third_party/ktop/",
@@ -59,24 +60,30 @@ COMMON_EXCLUDED_PATHS = [
     r".*\bexperimental[\\\/].*",
     r".*\b[A-Z0-9_]{2,}$",
     r".*[\\\/]debian[\\\/]rules$",
-    # for ebuild trees, ignore any caches and manifest data
+
+    # For ebuild trees, ignore any caches and manifest data.
     r".*/Manifest$",
     r".*/metadata/[^/]*cache[^/]*/[^/]+/[^/]+$",
 
-    # ignore profiles data (like overlay-tegra2/profiles)
+    # Ignore profiles data (like overlay-tegra2/profiles).
     r"(^|.*/)overlay-.*/profiles/.*",
     r"^profiles/.*$",
 
-    # ignore minified js and jquery
+    # Ignore minified js and jquery.
     r".*\.min\.js",
     r".*jquery.*\.js",
 
     # Ignore license files as the content is often taken verbatim.
-    r'.*/licenses/.*',
+    r".*/licenses/.*",
 ]
 
 
 _CONFIG_FILE = 'PRESUBMIT.cfg'
+
+
+# File containing wildcards, one per line, matching files that should be
+# excluded from presubmit checks. Lines beginning with '#' are ignored.
+_IGNORE_FILE = '.presubmitignore'
 
 
 # Exceptions
@@ -240,9 +247,71 @@ def _get_file_diff(path, commit):
   return new_lines
 
 
+def _get_ignore_wildcards(directory, cache):
+  """Get wildcards listed in a directory's _IGNORE_FILE.
+
+  Args:
+    directory: A string containing a directory path.
+    cache: A dictionary (opaque to caller) caching previously-read wildcards.
+
+  Returns:
+    A list of wildcards from _IGNORE_FILE or an empty list if _IGNORE_FILE
+    wasn't present.
+  """
+  # In the cache, keys are directories and values are lists of wildcards from
+  # _IGNORE_FILE within those directories (and empty if no file was present).
+  if directory not in cache:
+    wildcards = []
+    dotfile_path = os.path.join(directory, _IGNORE_FILE)
+    if os.path.exists(dotfile_path):
+      # TODO(derat): Consider using _get_file_content() to get the file as of
+      # this commit instead of the on-disk version. This may have a noticeable
+      # performance impact, as each call to _get_file_content() runs git.
+      with open(dotfile_path, 'r') as dotfile:
+        for line in dotfile.readlines():
+          line = line.strip()
+          if line.startswith('#'):
+            continue
+          if line.endswith('/'):
+            line += '*'
+          wildcards.append(line)
+    cache[directory] = wildcards
+
+  return cache[directory]
+
+
+def _path_is_ignored(path, cache):
+  """Check whether a path is ignored by _IGNORE_FILE.
+
+  Args:
+    path: A string containing a path.
+    cache: A dictionary (opaque to caller) caching previously-read wildcards.
+
+  Returns:
+    True if a file named _IGNORE_FILE in one of the passed-in path's parent
+    directories contains a wildcard matching the path.
+  """
+  # Skip ignore files.
+  if os.path.basename(path) == _IGNORE_FILE:
+    return True
+
+  path = os.path.abspath(path)
+  base = os.getcwd()
+
+  prefix = os.path.dirname(path)
+  while prefix.startswith(base):
+    rel_path = path[len(prefix) + 1:]
+    for wildcard in _get_ignore_wildcards(prefix, cache):
+      if fnmatch.fnmatch(rel_path, wildcard):
+        return True
+    prefix = os.path.dirname(prefix)
+
+  return False
+
+
 def _get_affected_files(commit, include_deletes=False, relative=False,
                         include_symlinks=False, include_adds=True,
-                        full_details=False):
+                        full_details=False, use_ignore_files=True):
   """Returns list of file paths that were modified/added, excluding symlinks.
 
   Args:
@@ -252,6 +321,7 @@ def _get_affected_files(commit, include_deletes=False, relative=False,
     include_symlinks: If true, we'll include symlinks in the result
     include_adds: If true, we'll include new files in the result
     full_details: If False, return filenames, else return structured results.
+    use_ignore_files: Whether we ignore files matched by _IGNORE_FILE files.
 
   Returns:
     A list of modified/added (and perhaps deleted) files
@@ -275,6 +345,11 @@ def _get_affected_files(commit, include_deletes=False, relative=False,
 
   if not include_adds:
     files = [x for x in files if x.status != 'A']
+
+  if use_ignore_files:
+    cache = {}
+    is_ignored = lambda x: _path_is_ignored(x.dst_file or x.src_file, cache)
+    files = [x for x in files if not is_ignored(x)]
 
   if full_details:
     # Caller wants the raw objects to parse status/etc... themselves.

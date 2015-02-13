@@ -804,10 +804,13 @@ def DiffEntry(src_file=None, dst_file=None, src_mode=None, dst_mode='100644',
                           src_file=src_file, dst_file=dst_file)
 
 
-class HelpersTest(cros_test_lib.MockTestCase):
+class HelpersTest(cros_test_lib.MockTempDirTestCase):
   """Various tests for utility functions."""
 
-  def _SetupGetAffectedFiles(self):
+  def setUp(self):
+    self.orig_cwd = os.getcwd()
+    os.chdir(self.tempdir)
+
     self.PatchObject(git, 'RawDiff', return_value=[
         # A modified normal file.
         DiffEntry(src_file='buildbot/constants.py', status='M'),
@@ -818,9 +821,18 @@ class HelpersTest(cros_test_lib.MockTestCase):
         DiffEntry(src_file='scripts/sync_sonic.py', status='D'),
     ])
 
+  def tearDown(self):
+    os.chdir(self.orig_cwd)
+
+  def _WritePresubmitIgnoreFile(self, subdir, data):
+    """Writes to a .presubmitignore file in the passed-in subdirectory."""
+    directory = os.path.join(self.tempdir, subdir)
+    if not os.path.exists(directory):
+      os.makedirs(directory)
+    osutils.WriteFile(os.path.join(directory, pre_upload._IGNORE_FILE), data)
+
   def testGetAffectedFilesNoDeletesNoRelative(self):
     """Verify _get_affected_files() works w/no delete & not relative."""
-    self._SetupGetAffectedFiles()
     path = os.getcwd()
     files = pre_upload._get_affected_files('HEAD', include_deletes=False,
                                            relative=False)
@@ -829,7 +841,6 @@ class HelpersTest(cros_test_lib.MockTestCase):
 
   def testGetAffectedFilesDeletesNoRelative(self):
     """Verify _get_affected_files() works w/delete & not relative."""
-    self._SetupGetAffectedFiles()
     path = os.getcwd()
     files = pre_upload._get_affected_files('HEAD', include_deletes=True,
                                            relative=False)
@@ -839,7 +850,6 @@ class HelpersTest(cros_test_lib.MockTestCase):
 
   def testGetAffectedFilesNoDeletesRelative(self):
     """Verify _get_affected_files() works w/no delete & relative."""
-    self._SetupGetAffectedFiles()
     files = pre_upload._get_affected_files('HEAD', include_deletes=False,
                                            relative=True)
     exp_files = ['buildbot/constants.py']
@@ -847,7 +857,6 @@ class HelpersTest(cros_test_lib.MockTestCase):
 
   def testGetAffectedFilesDeletesRelative(self):
     """Verify _get_affected_files() works w/delete & relative."""
-    self._SetupGetAffectedFiles()
     files = pre_upload._get_affected_files('HEAD', include_deletes=True,
                                            relative=True)
     exp_files = ['buildbot/constants.py', 'scripts/sync_sonic.py']
@@ -855,11 +864,44 @@ class HelpersTest(cros_test_lib.MockTestCase):
 
   def testGetAffectedFilesDetails(self):
     """Verify _get_affected_files() works w/full_details."""
-    self._SetupGetAffectedFiles()
     files = pre_upload._get_affected_files('HEAD', full_details=True,
                                            relative=True)
     self.assertEquals(files[0].src_file, 'buildbot/constants.py')
 
+  def testGetAffectedFilesPresubmitIgnoreDirectory(self):
+    """Verify .presubmitignore can be used to exclude a directory."""
+    self._WritePresubmitIgnoreFile('.', 'buildbot/')
+    self.assertEquals(pre_upload._get_affected_files('HEAD', relative=True), [])
+
+  def testGetAffectedFilesPresubmitIgnoreDirectoryWildcard(self):
+    """Verify .presubmitignore can be used with a directory wildcard."""
+    self._WritePresubmitIgnoreFile('.', '*/constants.py')
+    self.assertEquals(pre_upload._get_affected_files('HEAD', relative=True), [])
+
+  def testGetAffectedFilesPresubmitIgnoreWithinDirectory(self):
+    """Verify .presubmitignore can be placed in a subdirectory."""
+    self._WritePresubmitIgnoreFile('buildbot', '*.py')
+    self.assertEquals(pre_upload._get_affected_files('HEAD', relative=True), [])
+
+  def testGetAffectedFilesPresubmitIgnoreDoesntMatch(self):
+    """Verify .presubmitignore has no effect when it doesn't match a file."""
+    self._WritePresubmitIgnoreFile('buildbot', '*.txt')
+    self.assertEquals(pre_upload._get_affected_files('HEAD', relative=True),
+                      ['buildbot/constants.py'])
+
+  def testGetAffectedFilesPresubmitIgnoreAddedFile(self):
+    """Verify .presubmitignore matches added files."""
+    self._WritePresubmitIgnoreFile('.', 'buildbot/\nscripts/')
+    self.assertEquals(pre_upload._get_affected_files('HEAD', relative=True,
+                                                     include_symlinks=True),
+                      [])
+
+  def testGetAffectedFilesPresubmitIgnoreSkipIgnoreFile(self):
+    """Verify .presubmitignore files are automatically skipped."""
+    self.PatchObject(git, 'RawDiff', return_value=[
+        DiffEntry(src_file='.presubmitignore', status='M')
+    ])
+    self.assertEquals(pre_upload._get_affected_files('HEAD', relative=True), [])
 
 class CheckForUprev(cros_test_lib.MockTempDirTestCase):
   """Tests for _check_for_uprev."""

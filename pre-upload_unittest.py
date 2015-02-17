@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python2
 # -*- coding: utf-8 -*-
 # Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
@@ -21,7 +21,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                 '..', '..'))
 
 from chromite.cbuildbot import constants
-from chromite.lib import cros_build_lib
 from chromite.lib import cros_test_lib
 from chromite.lib import git
 from chromite.lib import osutils
@@ -39,7 +38,9 @@ class TryUTF8DecodeTest(cros_test_lib.TestCase):
   def runTest(self):
     self.assertEquals(u'', pre_upload._try_utf8_decode(''))
     self.assertEquals(u'abc', pre_upload._try_utf8_decode('abc'))
-    self.assertEquals(u'ä½ å¥½å¸èæ©', pre_upload._try_utf8_decode('ä½ å¥½å¸èæ©'))
+    self.assertEquals(
+        u'ä½ å¥½å¸èæ©',
+        pre_upload._try_utf8_decode('ä½ å¥½å¸èæ©'))
     # Invalid UTF-8
     self.assertEquals('\x80', pre_upload._try_utf8_decode('\x80'))
 
@@ -154,6 +155,54 @@ class CheckKernelConfig(cros_test_lib.MockTestCase):
     ]
     failure = pre_upload._kernel_configcheck('PROJECT', 'COMMIT')
     self.assertFalse(failure)
+
+
+class CheckPortageMakeUseVar(cros_test_lib.MockTestCase):
+  """Tests for _check_portage_make_use_var."""
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+    self.content_mock = self.PatchObject(pre_upload, '_get_file_content')
+
+  def testMakeConfOmitsOriginalUseValue(self):
+    """Fail for make.conf that discards the previous value of $USE."""
+    self.file_mock.return_value = ['make.conf']
+    self.content_mock.return_value = 'USE="foo"\nUSE="${USE} bar"'
+    failure = pre_upload._check_portage_make_use_var('PROJECT', 'COMMIT')
+    self.assertTrue(failure, failure)
+
+  def testMakeConfCorrectUsage(self):
+    """Succeed for make.conf that preserves the previous value of $USE."""
+    self.file_mock.return_value = ['make.conf']
+    self.content_mock.return_value = 'USE="${USE} foo"\nUSE="${USE}" bar'
+    failure = pre_upload._check_portage_make_use_var('PROJECT', 'COMMIT')
+    self.assertFalse(failure, failure)
+
+  def testMakeDefaultsReferencesOriginalUseValue(self):
+    """Fail for make.defaults that refers to a not-yet-set $USE value."""
+    self.file_mock.return_value = ['make.defaults']
+    self.content_mock.return_value = 'USE="${USE} foo"'
+    failure = pre_upload._check_portage_make_use_var('PROJECT', 'COMMIT')
+    self.assertTrue(failure, failure)
+
+    # Also check for "$USE" without curly brackets.
+    self.content_mock.return_value = 'USE="$USE foo"'
+    failure = pre_upload._check_portage_make_use_var('PROJECT', 'COMMIT')
+    self.assertTrue(failure, failure)
+
+  def testMakeDefaultsOverwritesUseValue(self):
+    """Fail for make.defaults that discards its own $USE value."""
+    self.file_mock.return_value = ['make.defaults']
+    self.content_mock.return_value = 'USE="foo"\nUSE="bar"'
+    failure = pre_upload._check_portage_make_use_var('PROJECT', 'COMMIT')
+    self.assertTrue(failure, failure)
+
+  def testMakeDefaultsCorrectUsage(self):
+    """Succeed for make.defaults that sets and preserves $USE."""
+    self.file_mock.return_value = ['make.defaults']
+    self.content_mock.return_value = 'USE="foo"\nUSE="${USE}" bar'
+    failure = pre_upload._check_portage_make_use_var('PROJECT', 'COMMIT')
+    self.assertFalse(failure, failure)
 
 
 class CheckEbuildEapi(cros_test_lib.MockTestCase):

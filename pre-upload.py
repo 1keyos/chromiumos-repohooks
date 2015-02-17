@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python2
 # Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -721,6 +721,46 @@ def _check_ebuild_virtual_pv(project, commit):
                       for x in bad_ebuilds]), url))
 
 
+def _check_portage_make_use_var(_project, commit):
+  """Verify that $USE is set correctly in make.conf and make.defaults."""
+  files = _filter_files(_get_affected_files(commit, relative=True),
+                        [r'(^|/)make.(conf|defaults)$'])
+
+  errors = []
+  for path in files:
+    basename = os.path.basename(path)
+
+    # Has a USE= line already been encountered in this file?
+    saw_use = False
+
+    for i, line in enumerate(_get_file_content(path, commit).splitlines(), 1):
+      if not line.startswith('USE='):
+        continue
+
+      preserves_use = '${USE}' in line or '$USE' in line
+
+      if (basename == 'make.conf' or
+          (basename == 'make.defaults' and saw_use)) and not preserves_use:
+        errors.append('%s:%d: missing ${USE}' % (path, i))
+      elif basename == 'make.defaults' and not saw_use and preserves_use:
+        errors.append('%s:%d: ${USE} referenced in initial declaration' %
+                      (path, i))
+
+      saw_use = True
+
+  if errors:
+    return HookFailure(
+        'One or more Portage make files appear to set USE incorrectly.\n'
+        '\n'
+        'All USE assignments in make.conf and all assignments after the\n'
+        'initial declaration in make.defaults should contain "${USE}" to\n'
+        'preserve previously-set flags.\n'
+        '\n'
+        'The initial USE declaration in make.defaults should not contain\n'
+        '"${USE}".\n',
+        errors)
+
+
 def _check_change_has_proper_changeid(_project, commit):
   """Verify that Change-ID is present in last paragraph of commit message."""
   CHANGE_ID_RE = r'\nChange-Id: I[a-f0-9]+\n'
@@ -1070,12 +1110,13 @@ _COMMON_HOOKS = [
     _check_ebuild_keywords,
     _check_ebuild_licenses,
     _check_ebuild_virtual_pv,
-    _check_no_stray_whitespace,
-    _check_no_long_lines,
+    _check_for_uprev,
     _check_layout_conf,
     _check_license,
+    _check_no_long_lines,
+    _check_no_stray_whitespace,
     _check_no_tabs,
-    _check_for_uprev,
+    _check_portage_make_use_var,
 ]
 
 

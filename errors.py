@@ -20,6 +20,9 @@ class HookFailure(object):
     self.msg = msg
     self.items = items
 
+  def __str__(self):
+    return _FormatHookFailure(self)
+
 
 _INDENT = ' ' * 4
 _PROJECT_INFO = 'Errors in PROJECT *%s*!'

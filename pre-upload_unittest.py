@@ -491,6 +491,93 @@ class CheckLicenseCopyrightHeader(cros_test_lib.MockTestCase):
       self.assertNotEqual(None, pre_upload._check_license('proj', 'sha1'))
 
 
+class CheckLayoutConfTestCase(cros_test_lib.MockTestCase):
+  """Tests for _check_layout_conf."""
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+    self.content_mock = self.PatchObject(pre_upload, '_get_file_content')
+
+  def assertAccepted(self, files, project='project', commit='fake sha1'):
+    """Assert _check_layout_conf accepts |files|."""
+    self.file_mock.return_value = files
+    ret = pre_upload._check_layout_conf(project, commit)
+    self.assertEqual(ret, None, msg='rejected with:\n%s' % ret)
+
+  def assertRejected(self, files, project='project', commit='fake sha1'):
+    """Assert _check_layout_conf rejects |files|."""
+    self.file_mock.return_value = files
+    ret = pre_upload._check_layout_conf(project, commit)
+    self.assertTrue(isinstance(ret, errors.HookFailure))
+
+  def GetLayoutConf(self, filters=()):
+    """Return a valid layout.conf with |filters| lines removed."""
+    all_lines = [
+        'masters = portage-stable chromiumos',
+        'profile-formats = portage-2 profile-default-eapi',
+        'profile_eapi_when_unspecified = 5-progress',
+        'repo-name = link',
+        'thin-manifests = true',
+        'use-manifests = true',
+    ]
+
+    lines = []
+    for line in all_lines:
+      for filt in filters:
+        if line.startswith(filt):
+          break
+      else:
+        lines.append(line)
+
+    return '\n'.join(lines)
+
+  def testNoFilesToCheck(self):
+    """Don't blow up when there are no layout.conf files."""
+    self.assertAccepted([])
+
+  def testRejectRepoNameFile(self):
+    """If profiles/repo_name is set, kick it out."""
+    self.assertRejected(['profiles/repo_name'])
+
+  def testAcceptValidLayoutConf(self):
+    """Accept a fully valid layout.conf."""
+    self.content_mock.return_value = self.GetLayoutConf()
+    self.assertAccepted(['metadata/layout.conf'])
+
+  def testAcceptUnknownKeys(self):
+    """Accept keys we don't explicitly know about."""
+    self.content_mock.return_value = self.GetLayoutConf() + '\nzzz-top = ok'
+    self.assertAccepted(['metadata/layout.conf'])
+
+  def testRejectUnsorted(self):
+    """Reject an unsorted layout.conf."""
+    self.content_mock.return_value = 'zzz-top = bad\n' + self.GetLayoutConf()
+    self.assertRejected(['metadata/layout.conf'])
+
+  def testRejectMissingThinManifests(self):
+    """Reject a layout.conf missing thin-manifests."""
+    self.content_mock.return_value = self.GetLayoutConf(
+        filters=['thin-manifests'])
+    self.assertRejected(['metadata/layout.conf'])
+
+  def testRejectMissingUseManifests(self):
+    """Reject a layout.conf missing use-manifests."""
+    self.content_mock.return_value = self.GetLayoutConf(
+        filters=['use-manifests'])
+    self.assertRejected(['metadata/layout.conf'])
+
+  def testRejectMissingEapiFallback(self):
+    """Reject a layout.conf missing profile_eapi_when_unspecified."""
+    self.content_mock.return_value = self.GetLayoutConf(
+        filters=['profile_eapi_when_unspecified'])
+    self.assertRejected(['metadata/layout.conf'])
+
+  def testRejectMissingRepoName(self):
+    """Reject a layout.conf missing repo-name."""
+    self.content_mock.return_value = self.GetLayoutConf(filters=['repo-name'])
+    self.assertRejected(['metadata/layout.conf'])
+
+
 class CommitMessageTestCase(cros_test_lib.MockTestCase):
   """Test case for funcs that check commit messages."""
 

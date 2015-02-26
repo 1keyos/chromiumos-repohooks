@@ -887,7 +887,8 @@ def _check_layout_conf(_project, commit):
         # TODO: Enable this for everyone.  http://crbug.com/408038
         #('fast caching', 'cache-format = md5-dict'),
         ('fast manifests', 'thin-manifests = true'),
-        ('extra features', 'profile-formats = portage-2'),
+        ('extra features', 'profile-formats = portage-2 profile-default-eapi'),
+        ('newer eapi', 'profile_eapi_when_unspecified = 5-progress'),
     )
     for reason, line in settings:
       if line not in data:

@@ -528,6 +528,7 @@ class CheckCommitMessageBug(CommitMessageTestCase):
     """Accept a commit message w/a valid BUG."""
     self.assertMessageAccepted('\nBUG=chromium:1234\n')
     self.assertMessageAccepted('\nBUG=chrome-os-partner:1234\n')
+    self.assertMessageAccepted('\nBUG=b:1234\n')
 
   def testNone(self):
     """Accept BUG=None."""
@@ -556,6 +557,7 @@ class CheckCommitMessageBug(CommitMessageTestCase):
   def testNoTrackers(self):
     """Reject commit messages w/invalid trackers."""
     self.assertMessageRejected('\nBUG=booga:1234\n')
+    self.assertMessageRejected('\nBUG=br:1234\n')
 
   def testMissing(self):
     """Reject commit messages w/no BUG line."""

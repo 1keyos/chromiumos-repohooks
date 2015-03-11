@@ -1155,8 +1155,8 @@ _PROJECT_SPECIFIC_HOOKS = {
 
 
 # A dictionary of flags (keys) that can appear in the config file, and the hook
-# that the flag disables (value)
-_DISABLE_FLAGS = {
+# that the flag controls (value).
+_HOOK_FLAGS = {
     'stray_whitespace_check': _check_no_stray_whitespace,
     'long_line_check': _check_no_long_lines,
     'cros_license_check': _check_license,
@@ -1168,8 +1168,8 @@ _DISABLE_FLAGS = {
 }
 
 
-def _get_disabled_hooks(config):
-  """Returns a set of hooks disabled by the current project's config file.
+def _get_override_hooks(config):
+  """Returns a set of hooks controlled by the current project's config file.
 
   Expects to be called within the project root.
 
@@ -1178,19 +1178,29 @@ def _get_disabled_hooks(config):
   """
   SECTION = 'Hook Overrides'
   if not config.has_section(SECTION):
-    return set()
+    return set(), set()
 
+  valid_keys = set(_HOOK_FLAGS.iterkeys())
+
+  enable_flags = []
   disable_flags = []
   for flag in config.options(SECTION):
+    if flag not in valid_keys:
+      raise ValueError('Error: unknown key "%s" in hook section of "%s"' %
+                       (flag, _CONFIG_FILE))
+
     try:
       if not config.getboolean(SECTION, flag):
         disable_flags.append(flag)
+      else:
+        enable_flags.append(flag)
     except ValueError as e:
-      msg = "Error parsing flag \'%s\' in %s file - " % (flag, _CONFIG_FILE)
-      print(msg + str(e))
+      raise ValueError('Error: parsing flag "%s" in "%s" failed: %s' %
+                       (flag, _CONFIG_FILE, e))
 
-  disabled_keys = set(_DISABLE_FLAGS.iterkeys()).intersection(disable_flags)
-  return set([_DISABLE_FLAGS[key] for key in disabled_keys])
+  enabled_hooks = set(_HOOK_FLAGS[key] for key in enable_flags)
+  disabled_hooks = set(_HOOK_FLAGS[key] for key in disable_flags)
+  return enabled_hooks, disabled_hooks
 
 
 def _get_project_hook_scripts(config):
@@ -1229,8 +1239,9 @@ def _get_project_hooks(project, presubmit):
   else:
     hook_list = _PATCH_DESCRIPTION_HOOKS + _COMMON_HOOKS
 
-  disabled_hooks = _get_disabled_hooks(config)
-  hooks = [hook for hook in hook_list if hook not in disabled_hooks]
+  enabled_hooks, disabled_hooks = _get_override_hooks(config)
+  hooks = (list(enabled_hooks) +
+           [hook for hook in hook_list if hook not in disabled_hooks])
 
   if project in _PROJECT_SPECIFIC_HOOKS:
     hooks.extend(hook for hook in _PROJECT_SPECIFIC_HOOKS[project]

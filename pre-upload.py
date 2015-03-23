@@ -1125,16 +1125,11 @@ _COMMON_HOOKS = [
 # dict[project] = [callback1, callback2]
 _PROJECT_SPECIFIC_HOOKS = {
     "chromeos/autotest-tools": [_run_json_check],
-    "chromeos/overlays/chromeos-overlay": [_check_manifests],
-    "chromeos/overlays/chromeos-partner-overlay": [_check_manifests],
     "chromeos/platform/ec-private": [_run_checkpatch_ec,
                                      _check_change_has_branch_field],
     "chromeos/third_party/intel-framework": [_check_change_has_branch_field],
     "chromeos/vendor/kernel-exynos-staging": [_run_checkpatch,
                                               _kernel_configcheck],
-    "chromiumos/overlays/board-overlays": [_check_manifests],
-    "chromiumos/overlays/chromiumos-overlay": [_check_manifests],
-    "chromiumos/overlays/portage-stable": [_check_manifests],
     "chromiumos/platform2": [_check_project_prefix],
     "chromiumos/platform/depthcharge": [_check_change_has_branch_field,
                                         _check_change_has_signoff_field,
@@ -1165,6 +1160,7 @@ _HOOK_FLAGS = {
     'signoff_check': _check_change_has_signoff_field,
     'bug_field_check': _check_change_has_bug_field,
     'test_field_check': _check_change_has_test_field,
+    'manifest_check': _check_manifests,
 }
 
 

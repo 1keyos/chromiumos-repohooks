@@ -1124,7 +1124,6 @@ _COMMON_HOOKS = [
 # A dictionary of project-specific hooks(callbacks), indexed by project name.
 # dict[project] = [callback1, callback2]
 _PROJECT_SPECIFIC_HOOKS = {
-    "chromeos/autotest-tools": [_run_json_check],
     "chromeos/platform/ec-private": [_run_checkpatch_ec,
                                      _check_change_has_branch_field],
     "chromeos/third_party/intel-framework": [_check_change_has_branch_field],
@@ -1153,6 +1152,7 @@ _PROJECT_SPECIFIC_HOOKS = {
 # that the flag controls (value).
 _HOOK_FLAGS = {
     'stray_whitespace_check': _check_no_stray_whitespace,
+    'json_check': _run_json_check,
     'long_line_check': _check_no_long_lines,
     'cros_license_check': _check_license,
     'tab_check': _check_no_tabs,

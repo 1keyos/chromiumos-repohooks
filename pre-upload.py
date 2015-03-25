@@ -1170,10 +1170,12 @@ def _get_override_hooks(config):
     config: A ConfigParser for the project's config file.
   """
   SECTION = 'Hook Overrides'
+  SECTION_OPTIONS = 'Hook Overrides Options'
   if not config.has_section(SECTION):
     return set(), set()
 
   valid_keys = set(_HOOK_FLAGS.iterkeys())
+  hooks = _HOOK_FLAGS.copy()
 
   enable_flags = []
   disable_flags = []
@@ -1183,16 +1185,25 @@ def _get_override_hooks(config):
                        (flag, _CONFIG_FILE))
 
     try:
-      if not config.getboolean(SECTION, flag):
-        disable_flags.append(flag)
-      else:
-        enable_flags.append(flag)
+      enabled = config.getboolean(SECTION, flag)
     except ValueError as e:
       raise ValueError('Error: parsing flag "%s" in "%s" failed: %s' %
                        (flag, _CONFIG_FILE, e))
+    if enabled:
+      enable_flags.append(flag)
+    else:
+      disable_flags.append(flag)
 
-  enabled_hooks = set(_HOOK_FLAGS[key] for key in enable_flags)
-  disabled_hooks = set(_HOOK_FLAGS[key] for key in disable_flags)
+    # See if this hook has custom options.
+    if enabled:
+      try:
+        options = config.get(SECTION_OPTIONS, flag)
+        hooks[flag] = functools.partial(hooks[flag], options=options.split())
+      except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
+        pass
+
+  enabled_hooks = set(hooks[x] for x in enable_flags)
+  disabled_hooks = set(hooks[x] for x in disable_flags)
   return enabled_hooks, disabled_hooks
 
 

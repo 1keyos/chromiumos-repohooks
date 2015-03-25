@@ -1147,6 +1147,7 @@ _PROJECT_SPECIFIC_HOOKS = {
 # A dictionary of flags (keys) that can appear in the config file, and the hook
 # that the flag controls (value).
 _HOOK_FLAGS = {
+    'checkpatch_check': _run_checkpatch,
     'stray_whitespace_check': _check_no_stray_whitespace,
     'json_check': _run_json_check,
     'long_line_check': _check_no_long_lines,

@@ -933,33 +933,6 @@ def _run_checkpatch(_project, commit, options=()):
     return HookFailure('checkpatch.pl errors/warnings\n\n' + output)
 
 
-def _run_checkpatch_no_tree(project, commit):
-  return _run_checkpatch(project, commit, ['--no-tree'])
-
-
-def _run_checkpatch_ec(project, commit):
-  """Runs checkpatch with options for Chromium EC projects."""
-  return _run_checkpatch(project, commit, ['--no-tree',
-                                           '--ignore=MSLEEP,VOLATILE'])
-
-
-def _run_checkpatch_depthcharge(project, commit):
-  """Runs checkpatch with options for depthcharge."""
-  return _run_checkpatch(project, commit, [
-      '--no-tree',
-      '--ignore=CAMELCASE,C99_COMMENTS,NEW_TYPEDEFS,CONFIG_DESCRIPTION,'
-      'SPACING,PREFER_PACKED,PREFER_PRINTF,PREFER_ALIGNED,GLOBAL_INITIALISERS,'
-      'INITIALISED_STATIC,OPEN_BRACE,TRAILING_STATEMENTS'])
-
-def _run_checkpatch_coreboot(project, commit):
-  """Runs checkpatch with options for coreboot."""
-  return _run_checkpatch(project, commit, [
-      '--min-conf-desc-length=2',
-      '--no-tree',
-      '--ignore=NEW_TYPEDEFS,PREFER_PACKED,PREFER_PRINTF,PREFER_ALIGNED,'
-      'GLOBAL_INITIALISERS,INITIALISED_STATIC,C99_COMMENTS'])
-
-
 def _kernel_configcheck(_project, commit):
   """Makes sure kernel config changes are not mixed with code changes"""
   files = _get_affected_files(commit)
@@ -1118,23 +1091,9 @@ _COMMON_HOOKS = [
 # A dictionary of project-specific hooks(callbacks), indexed by project name.
 # dict[project] = [callback1, callback2]
 _PROJECT_SPECIFIC_HOOKS = {
-    "chromeos/platform/ec-private": [_run_checkpatch_ec,
-                                     _check_change_has_branch_field],
-    "chromeos/vendor/kernel-exynos-staging": [_run_checkpatch,
-                                              _kernel_configcheck],
     "chromiumos/platform2": [_check_project_prefix],
-    "chromiumos/platform/depthcharge": [_check_change_has_branch_field,
-                                        _check_change_has_signoff_field,
-                                        _run_checkpatch_depthcharge],
-    "chromiumos/platform/ec": [_run_checkpatch_ec,
-                               _check_change_has_branch_field],
-    "chromiumos/third_party/coreboot": [_check_change_has_branch_field,
-                                        _check_change_has_signoff_field,
-                                        _run_checkpatch_coreboot],
-    "chromiumos/third_party/kernel": [_run_checkpatch, _kernel_configcheck],
-    "chromiumos/third_party/kernel-next": [_run_checkpatch,
-                                           _kernel_configcheck],
-    "chromiumos/third_party/u-boot": [_run_checkpatch_no_tree],
+    "chromiumos/third_party/kernel": [_kernel_configcheck],
+    "chromiumos/third_party/kernel-next": [_kernel_configcheck],
 }
 
 

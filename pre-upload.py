@@ -1054,12 +1054,6 @@ def _run_project_hook_script(script, project, commit):
                         ':\n' + stdout if stdout else ''))
 
 
-def _moved_to_platform2(project, _commit):
-  """Forbids commits to legacy repo in src/platform."""
-  return HookFailure('%s has been moved to platform2. This change should be '
-                     'made there.' % project)
-
-
 def _check_project_prefix(_project, commit):
   """Require the commit message have a project specific prefix as needed."""
 

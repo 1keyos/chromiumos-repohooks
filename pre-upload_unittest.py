@@ -1042,4 +1042,4 @@ class DirectMainTest(cros_test_lib.MockTempDirTestCase):
 
 
 if __name__ == '__main__':
-  cros_test_lib.main()
+  cros_test_lib.main(module=__name__)

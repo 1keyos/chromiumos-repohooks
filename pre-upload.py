@@ -707,7 +707,7 @@ def _check_ebuild_keywords(_project, commit):
         'If the ebuild should be marked unstable (normal for '
         'cros-workon / 9999 ebuilds):\n'
         '  KEYWORDS="~*"\n'
-        'If the ebuild needs to be marked for only specific arches,'
+        'If the ebuild needs to be marked for only specific arches, '
         'then use -* like so:\n'
         '  KEYWORDS="-* arm ..."\n' % '\n* '.join(bad_ebuilds))
 

@@ -444,6 +444,25 @@ def _check_no_tabs(_project, commit):
     return HookFailure('Found a tab character in:', errors)
 
 
+def _check_gofmt(_project, commit):
+  """Checks that Go files are formatted with gofmt."""
+  errors = []
+  files = _filter_files(_get_affected_files(commit, relative=True),
+                        [r'\.go$'])
+
+  for gofile in files:
+    contents = _get_file_content(gofile, commit)
+    p = subprocess.Popen(['gofmt', '-l'],
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT)
+    output = p.communicate(contents)[0]
+    if output:
+      errors.append(gofile)
+  if errors:
+    return HookFailure('Files not formatted with gofmt:', errors)
+
+
 def _check_change_has_test_field(_project, commit):
   """Check for a non-empty 'TEST=' field in the commit message."""
   TEST_RE = r'\nTEST=\S+'
@@ -1155,6 +1174,7 @@ _COMMON_HOOKS = [
     _check_ebuild_licenses,
     _check_ebuild_virtual_pv,
     _check_for_uprev,
+    _check_gofmt,
     _check_layout_conf,
     _check_license,
     _check_no_long_lines,

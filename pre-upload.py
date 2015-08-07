@@ -18,7 +18,6 @@ import os
 import re
 import sys
 import stat
-import subprocess
 
 from errors import (VerifyException, HookFailure, PrintErrorForProject,
                     PrintErrorsForCommit)
@@ -30,6 +29,7 @@ if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
 from chromite.lib import commandline
+from chromite.lib import cros_build_lib
 from chromite.lib import git
 from chromite.lib import osutils
 from chromite.lib import patch
@@ -97,20 +97,31 @@ class BadInvocation(Exception):
 # General Helpers
 
 
-def _run_command(cmd, cwd=None, stderr=None):
+# pylint: disable=redefined-builtin
+def _run_command(cmd, cwd=None, input=None,
+                 redirect_stderr=False, combine_stdout_stderr=False):
   """Executes the passed in command and returns raw stdout output.
 
   Args:
     cmd: The command to run; should be a list of strings.
     cwd: The directory to switch to for running the command.
-    stderr: Can be one of None (print stderr to console), subprocess.STDOUT
-        (combine stderr with stdout), or subprocess.PIPE (ignore stderr).
+    input: The data to pipe into this command through stdin. If a file object
+      or file descriptor, stdin will be connected directly to that.
+    redirect_stderr: Redirect stderr away from console.
+    combine_stdout_stderr: Combines stdout and stderr streams into stdout.
 
   Returns:
-    The standard out from the process.
+    The stdout from the process (discards stderr and returncode).
   """
-  p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr, cwd=cwd)
-  return p.communicate()[0]
+  return cros_build_lib.RunCommand(cmd=cmd,
+                                   cwd=cwd,
+                                   print_cmd=False,
+                                   input=input,
+                                   stdout_to_pipe=True,
+                                   redirect_stderr=redirect_stderr,
+                                   combine_stdout_stderr=combine_stdout_stderr,
+                                   error_code_ok=True).output
+# pylint: enable=redefined-builtin
 
 
 def _get_hooks_dir():
@@ -452,11 +463,8 @@ def _check_gofmt(_project, commit):
 
   for gofile in files:
     contents = _get_file_content(gofile, commit)
-    p = subprocess.Popen(['gofmt', '-l'],
-                         stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT)
-    output = p.communicate(contents)[0]
+    output = _run_command(cmd=['gofmt', '-l'], input=contents,
+                          combine_stdout_stderr=True)
     if output:
       errors.append(gofile)
   if errors:
@@ -1022,10 +1030,14 @@ def _run_checkpatch(_project, commit, options=()):
     # this case.
     options.append('--ignore=MISSING_SIGN_OFF')
   cmd = ['%s/checkpatch.pl' % hooks_dir] + options + ['-']
-  p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-  output = p.communicate(_get_patch(commit))[0]
-  if p.returncode:
-    return HookFailure('checkpatch.pl errors/warnings\n\n' + output)
+  cmd_result = cros_build_lib.RunCommand(cmd=cmd,
+                                         print_cmd=False,
+                                         input=_get_patch(commit),
+                                         stdout_to_pipe=True,
+                                         combine_stdout_stderr=True,
+                                         error_code_ok=True)
+  if cmd_result.returncode:
+    return HookFailure('checkpatch.pl errors/warnings\n\n' + cmd_result.output)
 
 
 def _kernel_configcheck(_project, commit):
@@ -1109,16 +1121,20 @@ def _run_project_hook_script(script, project, commit):
   files = _get_affected_files(commit)
   env['PRESUBMIT_FILES'] = '\n'.join(files)
 
-  process = subprocess.Popen(script, env=env, shell=True,
-                             stdin=open(os.devnull),
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT)
-  stdout, _ = process.communicate()
-  if process.wait():
+  cmd_result = cros_build_lib.RunCommand(cmd=script,
+                                         env=env,
+                                         shell=True,
+                                         print_cmd=False,
+                                         input=os.devnull,
+                                         stdout_to_pipe=True,
+                                         combine_stdout_stderr=True,
+                                         error_code_ok=True)
+  if cmd_result.returncode:
+    stdout = cmd_result.output
     if stdout:
       stdout = re.sub('(?m)^', '  ', stdout)
     return HookFailure('Hook script "%s" failed with code %d%s' %
-                       (script, process.returncode,
+                       (script, cmd_result.returncode,
                         ':\n' + stdout if stdout else ''))
 
 
@@ -1404,7 +1420,7 @@ def _identify_project(path):
     a blank string upon failure.
   """
   return _run_command(['repo', 'forall', '.', '-c', 'echo ${REPO_PROJECT}'],
-                      stderr=subprocess.PIPE, cwd=path).strip()
+                      redirect_stderr=True, cwd=path).strip()
 
 
 def direct_main(argv):
@@ -1469,7 +1485,7 @@ def direct_main(argv):
   # project from CWD
   if opts.dir is None:
     git_dir = _run_command(['git', 'rev-parse', '--git-dir'],
-                           stderr=subprocess.PIPE).strip()
+                           redirect_stderr=True).strip()
     if not git_dir:
       raise BadInvocation('The current directory is not part of a git project.')
     opts.dir = os.path.dirname(os.path.abspath(git_dir))

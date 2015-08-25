@@ -448,8 +448,8 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
 
-class CheckLicenseCopyrightHeader(cros_test_lib.MockTestCase):
-  """Tests for _check_license."""
+class CheckCrosLicenseCopyrightHeader(cros_test_lib.MockTestCase):
+  """Tests for _check_cros_license."""
 
   def setUp(self):
     self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
@@ -471,7 +471,7 @@ class CheckLicenseCopyrightHeader(cros_test_lib.MockTestCase):
     self.file_mock.return_value = ['file']
     for header in HEADERS:
       self.content_mock.return_value = header
-      self.assertEqual(None, pre_upload._check_license('proj', 'sha1'))
+      self.assertEqual(None, pre_upload._check_cros_license('proj', 'sha1'))
 
   def testRejectC(self):
     """Reject the (c) in newer headers."""
@@ -488,7 +488,79 @@ class CheckLicenseCopyrightHeader(cros_test_lib.MockTestCase):
     self.file_mock.return_value = ['file']
     for header in HEADERS:
       self.content_mock.return_value = header
-      self.assertNotEqual(None, pre_upload._check_license('proj', 'sha1'))
+      self.assertNotEqual(None, pre_upload._check_cros_license('proj', 'sha1'))
+
+
+class CheckAOSPLicenseCopyrightHeader(cros_test_lib.MockTestCase):
+  """Tests for _check_aosp_license."""
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+    self.content_mock = self.PatchObject(pre_upload, '_get_file_content')
+
+  def testHeaders(self):
+    """Accept old header styles."""
+    HEADERS = (
+        """//
+// Copyright (C) 2011 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+""",
+        """#
+# Copyright (c) 2015 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+""",
+    )
+    self.file_mock.return_value = ['file']
+    for header in HEADERS:
+      self.content_mock.return_value = header
+      self.assertEqual(None, pre_upload._check_aosp_license('proj', 'sha1'))
+
+  def testRejectNoLinesAround(self):
+    """Reject headers missing the empty lines before/after the license."""
+    HEADERS = (
+        """# Copyright (c) 2015 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+""",
+    )
+    self.file_mock.return_value = ['file']
+    for header in HEADERS:
+      self.content_mock.return_value = header
+      self.assertNotEqual(None, pre_upload._check_aosp_license('proj', 'sha1'))
 
 
 class CheckLayoutConfTestCase(cros_test_lib.MockTestCase):

@@ -902,8 +902,8 @@ def _check_commit_message_style(_project, commit):
                        MAX_FIRST_LINE_LEN)
 
 
-def _check_license(_project, commit):
-  """Verifies the license/copyright header.
+def _check_cros_license(_project, commit):
+  """Verifies the Chromium OS license/copyright header.
 
   Should be following the spec:
   http://dev.chromium.org/developers/coding-style#TOC-File-headers
@@ -952,6 +952,53 @@ def _check_license(_project, commit):
   if bad_copyright_files:
     msg = 'Do not use (c) in copyright headers in new files:'
     return HookFailure(msg, bad_copyright_files)
+
+
+def _check_aosp_license(_project, commit):
+  """Verifies the AOSP license/copyright header.
+
+  AOSP uses the Apache2 License:
+  https://source.android.com/source/licenses.html
+  """
+  LICENSE_HEADER = (
+      r"""^[#/\*]*
+[#/\*]* ?Copyright( \([cC]\))? 20[-0-9]{2,7} The Android Open Source Project
+[#/\*]* ?
+[#/\*]* ?Licensed under the Apache License, Version 2.0 \(the "License"\);
+[#/\*]* ?you may not use this file except in compliance with the License\.
+[#/\*]* ?You may obtain a copy of the License at
+[#/\*]* ?
+[#/\*]* ?      http://www\.apache\.org/licenses/LICENSE-2\.0
+[#/\*]* ?
+[#/\*]* ?Unless required by applicable law or agreed to in writing, software
+[#/\*]* ?distributed under the License is distributed on an "AS IS" BASIS,
+[#/\*]* ?WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or """
+      r"""implied\.
+[#/\*]* ?See the License for the specific language governing permissions and
+[#/\*]* ?limitations under the License\.
+[#/\*]*$
+"""
+  )
+  license_re = re.compile(LICENSE_HEADER, re.MULTILINE)
+
+  files = _filter_files(_get_affected_files(commit, relative=True),
+                        COMMON_INCLUDED_PATHS,
+                        COMMON_EXCLUDED_PATHS)
+
+  bad_files = []
+  for f in files:
+    contents = _get_file_content(f, commit)
+    if not contents:
+      # Ignore empty files.
+      continue
+
+    if not license_re.search(contents):
+      bad_files.append(f)
+
+  if bad_files:
+    msg = ('License must match:\n%s\nFound a bad header in these files:' %
+           license_re.pattern)
+    return HookFailure(msg, bad_files)
 
 
 def _check_layout_conf(_project, commit):
@@ -1192,7 +1239,7 @@ _COMMON_HOOKS = [
     _check_for_uprev,
     _check_gofmt,
     _check_layout_conf,
-    _check_license,
+    _check_cros_license,
     _check_no_long_lines,
     _check_no_stray_whitespace,
     _check_no_tabs,
@@ -1216,7 +1263,8 @@ _HOOK_FLAGS = {
     'stray_whitespace_check': _check_no_stray_whitespace,
     'json_check': _run_json_check,
     'long_line_check': _check_no_long_lines,
-    'cros_license_check': _check_license,
+    'cros_license_check': _check_cros_license,
+    'aosp_license_check': _check_aosp_license,
     'tab_check': _check_no_tabs,
     'branch_check': _check_change_has_branch_field,
     'signoff_check': _check_change_has_signoff_field,

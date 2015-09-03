@@ -10,6 +10,7 @@ You can add new checks by adding a functions to the HOOKS constants.
 
 from __future__ import print_function
 
+import collections
 import ConfigParser
 import fnmatch
 import functools
@@ -95,6 +96,9 @@ class BadInvocation(Exception):
 
 
 # General Helpers
+
+
+Project = collections.namedtuple('Project', ['name', 'dir', 'remote'])
 
 
 # pylint: disable=redefined-builtin
@@ -490,7 +494,7 @@ def _check_change_has_valid_cq_depend(_project, commit):
     return HookFailure(msg, [example, str(ex)])
 
 
-def _check_change_has_bug_field(_project, commit):
+def _check_change_has_bug_field(project, commit):
   """Check for a correctly formatted 'BUG=' field in the commit message."""
   OLD_BUG_RE = r'\nBUG=.*chromium-os'
   if re.search(OLD_BUG_RE, _get_commit_desc(commit)):
@@ -498,15 +502,29 @@ def _check_change_has_bug_field(_project, commit):
            'the chromium tracker in your BUG= line now.')
     return HookFailure(msg)
 
-  BUG_RE = r'\nBUG=([Nn]one|(chrome-os-partner|chromium|brillo|b):\d+)'
-  if not re.search(BUG_RE, _get_commit_desc(commit)):
-    msg = ('Changelist description needs BUG field (after first line):\n'
-           'BUG=brillo:9999 (for Brillo tracker)\n'
-           'BUG=chromium:9999 (for public tracker)\n'
-           'BUG=chrome-os-partner:9999 (for partner tracker)\n'
-           'BUG=b:9999 (for buganizer)\n'
-           'BUG=None')
-    return HookFailure(msg)
+  # Android internal and external projects use "Bug: " to track bugs in
+  # buganizer.
+  BUG_COLON_REMOTES = (
+      'aosp',
+      'goog',
+  )
+  if project.remote in BUG_COLON_REMOTES:
+    BUG_RE = r'\nBug: ?([Nn]one|\d+)'
+    if not re.search(BUG_RE, _get_commit_desc(commit)):
+      msg = ('Changelist description needs BUG field (after first line):\n'
+             'Bug: 9999 (for buganizer)\n'
+             'BUG=None')
+      return HookFailure(msg)
+  else:
+    BUG_RE = r'\nBUG=([Nn]one|(chrome-os-partner|chromium|brillo|b):\d+)'
+    if not re.search(BUG_RE, _get_commit_desc(commit)):
+      msg = ('Changelist description needs BUG field (after first line):\n'
+             'BUG=brillo:9999 (for Brillo tracker)\n'
+             'BUG=chromium:9999 (for public tracker)\n'
+             'BUG=chrome-os-partner:9999 (for partner tracker)\n'
+             'BUG=b:9999 (for buganizer)\n'
+             'BUG=None')
+      return HookFailure(msg)
 
 
 def _check_for_uprev(project, commit, project_top=None):
@@ -532,7 +550,7 @@ def _check_for_uprev(project, commit, project_top=None):
   still better off than without this check.
 
   Args:
-    project: The project to look at
+    project: The Project to look at
     commit: The commit to look at
     project_top: Top dir to process commits in
 
@@ -545,7 +563,7 @@ def _check_for_uprev(project, commit, project_top=None):
   whitelist = (
       'chromiumos/overlays/portage-stable',
   )
-  if project in whitelist:
+  if project.name in whitelist:
     return None
 
   def FinalName(obj):
@@ -628,7 +646,7 @@ def _check_ebuild_eapi(project, commit):
   have less builtin error checking.
 
   Args:
-    project: The project to look at
+    project: The Project to look at
     commit: The commit to look at
 
   Returns:
@@ -640,7 +658,7 @@ def _check_ebuild_eapi(project, commit):
   whitelist = (
       'chromiumos/overlays/portage-stable',
   )
-  if project in whitelist:
+  if project.name in whitelist:
     return None
 
   BAD_EAPIS = ('0', '1', '2', '3')
@@ -697,7 +715,7 @@ def _check_ebuild_keywords(_project, commit):
     KEYWORDS="-* ..."  # Is known to only work on specific arches.
 
   Args:
-    project: The project to look at
+    project: The Project to look at
     commit: The commit to look at
 
   Returns:
@@ -773,12 +791,12 @@ def _check_ebuild_virtual_pv(project, commit):
   whitelist = (
       'chromiumos/overlays/portage-stable',
   )
-  if project in whitelist:
+  if project.name in whitelist:
     return None
 
   # We assume the repo name is the same as the dir name on disk.
   # It would be dumb to not have them match though.
-  project = os.path.basename(project)
+  project_base = os.path.basename(project.name)
 
   is_variant = lambda x: x.startswith('overlay-variant-')
   is_board = lambda x: x.startswith('overlay-')
@@ -796,7 +814,7 @@ def _check_ebuild_virtual_pv(project, commit):
     if m:
       overlay = m.group(1)
       if not overlay or not is_board(overlay):
-        overlay = project
+        overlay = project_base
 
       pv = m.group(3).split('-', 1)[0]
 
@@ -1161,7 +1179,7 @@ def _run_project_hook_script(script, project, commit):
   write an error message to stdout.
   """
   env = dict(os.environ)
-  env['PRESUBMIT_PROJECT'] = project
+  env['PRESUBMIT_PROJECT'] = project.name
   env['PRESUBMIT_COMMIT'] = commit
 
   # Put affected files in an environment variable
@@ -1370,12 +1388,12 @@ def _get_project_hooks(project, presubmit):
   return hooks
 
 
-def _run_project_hooks(project, proj_dir=None,
+def _run_project_hooks(project_name, proj_dir=None,
                        commit_list=None, presubmit=False):
   """For each project run its project specific hook from the hooks dictionary.
 
   Args:
-    project: The name of project to run hooks for.
+    project_name: The name of project to run hooks for.
     proj_dir: If non-None, this is the directory the project is in.  If None,
         we'll ask repo.
     commit_list: A list of commits to run hooks against.  If None or empty list
@@ -1386,13 +1404,14 @@ def _run_project_hooks(project, proj_dir=None,
     Boolean value of whether any errors were ecountered while running the hooks.
   """
   if proj_dir is None:
-    proj_dirs = _run_command(['repo', 'forall', project, '-c', 'pwd']).split()
+    proj_dirs = _run_command(
+        ['repo', 'forall', project_name, '-c', 'pwd']).split()
     if len(proj_dirs) == 0:
-      print('%s cannot be found.' % project, file=sys.stderr)
+      print('%s cannot be found.' % project_name, file=sys.stderr)
       print('Please specify a valid project.', file=sys.stderr)
       return True
     if len(proj_dirs) > 1:
-      print('%s is associated with multiple directories.' % project,
+      print('%s is associated with multiple directories.' % project_name,
             file=sys.stderr)
       print('Please specify a directory to help disambiguate.', file=sys.stderr)
       return True
@@ -1402,15 +1421,26 @@ def _run_project_hooks(project, proj_dir=None,
   # hooks assume they are run from the root of the project
   os.chdir(proj_dir)
 
+  remote_branch = _run_command(['git', 'rev-parse', '--abbrev-ref',
+                                '--symbolic-full-name', '@{u}']).strip()
+  if not remote_branch:
+    print('Your project %s doesn\'t track any remote repo.' % project_name,
+          file=sys.stderr)
+    remote = None
+  else:
+    remote, _branch = remote_branch.split('/', 1)
+
+  project = Project(name=project_name, dir=proj_dir, remote=remote)
+
   if not commit_list:
     try:
       commit_list = _get_commits()
     except VerifyException as e:
-      PrintErrorForProject(project, HookFailure(str(e)))
+      PrintErrorForProject(project.name, HookFailure(str(e)))
       os.chdir(pwd)
       return True
 
-  hooks = _get_project_hooks(project, presubmit)
+  hooks = _get_project_hooks(project.name, presubmit)
   error_found = False
   for commit in commit_list:
     error_list = []
@@ -1420,7 +1450,7 @@ def _run_project_hooks(project, proj_dir=None,
         error_list.append(hook_error)
         error_found = True
     if error_list:
-      PrintErrorsForCommit(project, commit, _get_commit_desc(commit),
+      PrintErrorsForCommit(project.name, commit, _get_commit_desc(commit),
                            error_list)
 
   os.chdir(pwd)

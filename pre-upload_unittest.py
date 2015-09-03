@@ -32,6 +32,11 @@ import mock
 pre_upload = __import__('pre-upload')
 
 
+def ProjectNamed(project_name):
+  """Wrapper to create a Project with just the name"""
+  return pre_upload.Project(project_name, None, None)
+
+
 class TryUTF8DecodeTest(cros_test_lib.TestCase):
   """Verify we sanely handle unicode content."""
 
@@ -64,7 +69,7 @@ class CheckNoLongLinesTest(cros_test_lib.MockTestCase):
         (7, u"#  define " + (u"x" * 80)),    # OK (compiler directive)
         (8, u"#define" + (u"x" * 74)),       # Too long
     ]
-    failure = pre_upload._check_no_long_lines('PROJECT', 'COMMIT')
+    failure = pre_upload._check_no_long_lines(ProjectNamed('PROJECT'), 'COMMIT')
     self.assertTrue(failure)
     self.assertEquals('Found lines longer than 80 characters (first 5 shown):',
                       failure.msg)
@@ -94,7 +99,8 @@ class CheckProjectPrefix(cros_test_lib.MockTempDirTestCase):
     """Report an error when the prefix doesn't match the base directory."""
     self.file_mock.return_value = ['foo/foo.cc', 'foo/subdir/baz.cc']
     self.desc_mock.return_value = 'bar: Some commit'
-    failure = pre_upload._check_project_prefix('PROJECT', 'COMMIT')
+    failure = pre_upload._check_project_prefix(ProjectNamed('PROJECT'),
+                                               'COMMIT')
     self.assertTrue(failure)
     self.assertEquals(('The commit title for changes affecting only foo' +
                        ' should start with "foo: "'), failure.msg)
@@ -103,14 +109,16 @@ class CheckProjectPrefix(cros_test_lib.MockTempDirTestCase):
     """Use a prefix that matches the base directory."""
     self.file_mock.return_value = ['foo/foo.cc', 'foo/subdir/baz.cc']
     self.desc_mock.return_value = 'foo: Change some files.'
-    self.assertFalse(pre_upload._check_project_prefix('PROJECT', 'COMMIT'))
+    self.assertFalse(
+        pre_upload._check_project_prefix(ProjectNamed('PROJECT'), 'COMMIT'))
 
   def testAliasFile(self):
     """Use .project_alias to override the project name."""
     self._WriteAliasFile('foo/.project_alias', 'project')
     self.file_mock.return_value = ['foo/foo.cc', 'foo/subdir/bar.cc']
     self.desc_mock.return_value = 'project: Use an alias.'
-    self.assertFalse(pre_upload._check_project_prefix('PROJECT', 'COMMIT'))
+    self.assertFalse(
+        pre_upload._check_project_prefix(ProjectNamed('PROJECT'), 'COMMIT'))
 
   def testAliasFileWithSubdirs(self):
     """Check that .project_alias is used when only modifying subdirectories."""
@@ -121,7 +129,8 @@ class CheckProjectPrefix(cros_test_lib.MockTempDirTestCase):
         'foo/subdir/blah/baz.cc'
     ]
     self.desc_mock.return_value = 'project: Alias with subdirs.'
-    self.assertFalse(pre_upload._check_project_prefix('PROJECT', 'COMMIT'))
+    self.assertFalse(
+        pre_upload._check_project_prefix(ProjectNamed('PROJECT'), 'COMMIT'))
 
 
 class CheckKernelConfig(cros_test_lib.MockTestCase):
@@ -208,7 +217,7 @@ class CheckPortageMakeUseVar(cros_test_lib.MockTestCase):
 class CheckEbuildEapi(cros_test_lib.MockTestCase):
   """Tests for _check_ebuild_eapi."""
 
-  PORTAGE_STABLE = 'chromiumos/overlays/portage-stable'
+  PORTAGE_STABLE = ProjectNamed('chromiumos/overlays/portage-stable')
 
   def setUp(self):
     self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
@@ -230,18 +239,19 @@ class CheckEbuildEapi(cros_test_lib.MockTestCase):
     self.content_mock.side_effect = Exception()
 
     self.file_mock.return_value = ['some-file', 'ebuild/dir', 'an.ebuild~']
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertEqual(ret, None)
 
     # Make sure our condition above triggers.
     self.file_mock.return_value.append('a/real.ebuild')
-    self.assertRaises(Exception, pre_upload._check_ebuild_eapi, 'o', 'HEAD')
+    self.assertRaises(Exception, pre_upload._check_ebuild_eapi,
+                      ProjectNamed('o'), 'HEAD')
 
   def testSkipSymlink(self):
     """Skip files that are just symlinks."""
     self.file_mock.return_value = ['a-r1.ebuild']
     self.content_mock.return_value = 'a.ebuild'
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertEqual(ret, None)
 
   def testRejectEapiImplicit0Content(self):
@@ -252,7 +262,7 @@ class CheckEbuildEapi(cros_test_lib.MockTestCase):
 IUSE="foo"
 src_compile() { }
 """
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testRejectExplicitEapi1Content(self):
@@ -266,17 +276,17 @@ src_compile() { }
 """
     # Make sure we only check the first EAPI= setting.
     self.content_mock.return_value = template % '1\nEAPI=4'
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
     # Verify we handle double quotes too.
     self.content_mock.return_value = template % '"1"'
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
     # Verify we handle single quotes too.
     self.content_mock.return_value = template % "'1'"
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testAcceptExplicitEapi4Content(self):
@@ -290,17 +300,17 @@ src_compile() { }
 """
     # Make sure we only check the first EAPI= setting.
     self.content_mock.return_value = template % '4\nEAPI=1'
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertEqual(ret, None)
 
     # Verify we handle double quotes too.
     self.content_mock.return_value = template % '"5"'
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertEqual(ret, None)
 
     # Verify we handle single quotes too.
     self.content_mock.return_value = template % "'5-hdepend'"
-    ret = pre_upload._check_ebuild_eapi('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertEqual(ret, None)
 
 
@@ -315,7 +325,7 @@ class CheckEbuildKeywords(cros_test_lib.MockTestCase):
     """If no ebuilds are found, do not scan."""
     self.file_mock.return_value = ['a.file', 'ebuild-is-not.foo']
 
-    ret = pre_upload._check_ebuild_keywords('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_keywords(ProjectNamed('overlay'), 'HEAD')
     self.assertEqual(ret, None)
 
     self.assertEqual(self.content_mock.call_count, 0)
@@ -325,7 +335,7 @@ class CheckEbuildKeywords(cros_test_lib.MockTestCase):
     self.file_mock.return_value = ['a.file', 'blah', 'foo.ebuild', 'cow']
     self.content_mock.return_value = ''
 
-    ret = pre_upload._check_ebuild_keywords('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_keywords(ProjectNamed('overlay'), 'HEAD')
     self.assertEqual(ret, None)
 
     self.assertEqual(self.content_mock.call_count, 1)
@@ -340,7 +350,7 @@ class CheckEbuildKeywords(cros_test_lib.MockTestCase):
     self.file_mock.return_value = ['a.ebuild']
     self.content_mock.return_value = content
 
-    ret = pre_upload._check_ebuild_keywords('overlay', 'HEAD')
+    ret = pre_upload._check_ebuild_keywords(ProjectNamed('overlay'), 'HEAD')
     if fails:
       self.assertTrue(isinstance(ret, errors.HookFailure))
     else:
@@ -376,12 +386,12 @@ class CheckEbuildKeywords(cros_test_lib.MockTestCase):
 class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
   """Tests for _check_ebuild_virtual_pv."""
 
-  PORTAGE_STABLE = 'chromiumos/overlays/portage-stable'
-  CHROMIUMOS_OVERLAY = 'chromiumos/overlays/chromiumos'
-  BOARD_OVERLAY = 'chromiumos/overlays/board-overlays'
-  PRIVATE_OVERLAY = 'chromeos/overlays/overlay-link-private'
-  PRIVATE_VARIANT_OVERLAY = ('chromeos/overlays/'
-                             'overlay-variant-daisy-spring-private')
+  PORTAGE_STABLE = ProjectNamed('chromiumos/overlays/portage-stable')
+  CHROMIUMOS_OVERLAY = ProjectNamed('chromiumos/overlays/chromiumos')
+  BOARD_OVERLAY = ProjectNamed('chromiumos/overlays/board-overlays')
+  PRIVATE_OVERLAY = ProjectNamed('chromeos/overlays/overlay-link-private')
+  PRIVATE_VARIANT_OVERLAY = ProjectNamed('chromeos/overlays/'
+                                         'overlay-variant-daisy-spring-private')
 
   def setUp(self):
     self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
@@ -389,7 +399,7 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
   def testNoVirtuals(self):
     """Skip non virtual packages."""
     self.file_mock.return_value = ['some/package/package-3.ebuild']
-    ret = pre_upload._check_ebuild_virtual_pv('overlay', 'H')
+    ret = pre_upload._check_ebuild_virtual_pv(ProjectNamed('overlay'), 'H')
     self.assertEqual(ret, None)
 
   def testCommonVirtuals(self):
@@ -663,13 +673,15 @@ class CommitMessageTestCase(cros_test_lib.MockTestCase):
     # enable it for all the call sites below.
     return 1 # pylint: disable=W0101
 
-  def assertMessageAccepted(self, msg, project='project', commit='1234'):
+  def assertMessageAccepted(self, msg, project=ProjectNamed('project'),
+                            commit='1234'):
     """Assert _check_change_has_bug_field accepts |msg|."""
     self.msg_mock.return_value = msg
     ret = self.CheckMessage(project, commit)
     self.assertEqual(ret, None)
 
-  def assertMessageRejected(self, msg, project='project', commit='1234'):
+  def assertMessageRejected(self, msg, project=ProjectNamed('project'),
+                            commit='1234'):
     """Assert _check_change_has_bug_field rejects |msg|."""
     self.msg_mock.return_value = msg
     ret = self.CheckMessage(project, commit)
@@ -679,44 +691,60 @@ class CommitMessageTestCase(cros_test_lib.MockTestCase):
 class CheckCommitMessageBug(CommitMessageTestCase):
   """Tests for _check_change_has_bug_field."""
 
+  AOSP_PROJECT = pre_upload.Project(name='overlay', dir='', remote='aosp')
+  CROS_PROJECT = pre_upload.Project(name='overlay', dir='', remote='cros')
+
   @staticmethod
   def CheckMessage(project, commit):
     return pre_upload._check_change_has_bug_field(project, commit)
 
   def testNormal(self):
     """Accept a commit message w/a valid BUG."""
-    self.assertMessageAccepted('\nBUG=chromium:1234\n')
-    self.assertMessageAccepted('\nBUG=chrome-os-partner:1234\n')
-    self.assertMessageAccepted('\nBUG=b:1234\n')
+    self.assertMessageAccepted('\nBUG=chromium:1234\n', self.CROS_PROJECT)
+    self.assertMessageAccepted('\nBUG=chrome-os-partner:1234\n',
+                               self.CROS_PROJECT)
+    self.assertMessageAccepted('\nBUG=b:1234\n', self.CROS_PROJECT)
+
+    self.assertMessageAccepted('\nBug: 1234\n', self.AOSP_PROJECT)
+    self.assertMessageAccepted('\nBug:1234\n', self.AOSP_PROJECT)
 
   def testNone(self):
     """Accept BUG=None."""
-    self.assertMessageAccepted('\nBUG=None\n')
-    self.assertMessageAccepted('\nBUG=none\n')
-    self.assertMessageRejected('\nBUG=NONE\n')
+    self.assertMessageAccepted('\nBUG=None\n', self.CROS_PROJECT)
+    self.assertMessageAccepted('\nBUG=none\n', self.CROS_PROJECT)
+    self.assertMessageAccepted('\nBug: None\n', self.AOSP_PROJECT)
+    self.assertMessageAccepted('\nBug:none\n', self.AOSP_PROJECT)
+
+    for project in (self.AOSP_PROJECT, self.CROS_PROJECT):
+      self.assertMessageRejected('\nBUG=NONE\n', project)
 
   def testBlank(self):
     """Reject blank values."""
-    self.assertMessageRejected('\nBUG=\n')
-    self.assertMessageRejected('\nBUG=    \n')
+    for project in (self.AOSP_PROJECT, self.CROS_PROJECT):
+      self.assertMessageRejected('\nBUG=\n', project)
+      self.assertMessageRejected('\nBUG=    \n', project)
+      self.assertMessageRejected('\nBug:\n', project)
+      self.assertMessageRejected('\nBug:    \n', project)
 
   def testNotFirstLine(self):
     """Reject the first line."""
-    self.assertMessageRejected('BUG=None\n\n\n')
+    for project in (self.AOSP_PROJECT, self.CROS_PROJECT):
+      self.assertMessageRejected('BUG=None\n\n\n', project)
 
   def testNotInline(self):
     """Reject not at the start of line."""
-    self.assertMessageRejected('\n BUG=None\n')
-    self.assertMessageRejected('\n\tBUG=None\n')
+    for project in (self.AOSP_PROJECT, self.CROS_PROJECT):
+      self.assertMessageRejected('\n BUG=None\n', project)
+      self.assertMessageRejected('\n\tBUG=None\n', project)
 
   def testOldTrackers(self):
     """Reject commit messages using old trackers."""
-    self.assertMessageRejected('\nBUG=chromium-os:1234\n')
+    self.assertMessageRejected('\nBUG=chromium-os:1234\n', self.CROS_PROJECT)
 
   def testNoTrackers(self):
     """Reject commit messages w/invalid trackers."""
-    self.assertMessageRejected('\nBUG=booga:1234\n')
-    self.assertMessageRejected('\nBUG=br:1234\n')
+    self.assertMessageRejected('\nBUG=booga:1234\n', self.CROS_PROJECT)
+    self.assertMessageRejected('\nBUG=br:1234\n', self.CROS_PROJECT)
 
   def testMissing(self):
     """Reject commit messages w/no BUG line."""
@@ -996,13 +1024,15 @@ class CheckForUprev(cros_test_lib.MockTempDirTestCase):
   def assertAccepted(self, files, project='project', commit='fake sha1'):
     """Assert _check_for_uprev accepts |files|."""
     self.file_mock.return_value = self._Files(files)
-    ret = pre_upload._check_for_uprev(project, commit, project_top=self.tempdir)
+    ret = pre_upload._check_for_uprev(ProjectNamed(project), commit,
+                                      project_top=self.tempdir)
     self.assertEqual(ret, None)
 
   def assertRejected(self, files, project='project', commit='fake sha1'):
     """Assert _check_for_uprev rejects |files|."""
     self.file_mock.return_value = self._Files(files)
-    ret = pre_upload._check_for_uprev(project, commit, project_top=self.tempdir)
+    ret = pre_upload._check_for_uprev(ProjectNamed(project), commit,
+                                      project_top=self.tempdir)
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
   def testWhitelistOverlay(self):

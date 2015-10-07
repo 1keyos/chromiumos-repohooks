@@ -1094,6 +1094,10 @@ def _run_checkpatch(_project, commit, options=()):
     # The --ignore option must be present and include 'MISSING_SIGN_OFF' in
     # this case.
     options.append('--ignore=MISSING_SIGN_OFF')
+  # Always ignore the check for the MAINTAINERS file.  We do not track that
+  # information on that file in our source trees, so let's suppress the
+  # warning.
+  options.append('--ignore=FILE_PATH_CHANGES')
   cmd = ['%s/checkpatch.pl' % hooks_dir] + options + ['-']
   cmd_result = cros_build_lib.RunCommand(cmd=cmd,
                                          print_cmd=False,

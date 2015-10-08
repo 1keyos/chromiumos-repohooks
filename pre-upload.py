@@ -1098,6 +1098,7 @@ def _run_checkpatch(_project, commit, options=()):
   # information on that file in our source trees, so let's suppress the
   # warning.
   options.append('--ignore=FILE_PATH_CHANGES')
+  options.append('--ignore=GERRIT_CHANGE_ID')
   cmd = ['%s/checkpatch.pl' % hooks_dir] + options + ['-']
   cmd_result = cros_build_lib.RunCommand(cmd=cmd,
                                          print_cmd=False,

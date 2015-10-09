@@ -1378,13 +1378,21 @@ def _get_project_hooks(project, presubmit):
     config = ConfigParser.RawConfigParser()
 
   if presubmit:
-    hook_list = _COMMON_HOOKS
+    hooks = _COMMON_HOOKS
   else:
-    hook_list = _PATCH_DESCRIPTION_HOOKS + _COMMON_HOOKS
+    hooks = _PATCH_DESCRIPTION_HOOKS + _COMMON_HOOKS
 
   enabled_hooks, disabled_hooks = _get_override_hooks(config)
-  hooks = (list(enabled_hooks) +
-           [hook for hook in hook_list if hook not in disabled_hooks])
+  hooks = [hook for hook in hooks if hook not in disabled_hooks]
+
+  # If a list is both in _COMMON_HOOKS and also enabled explicitly through an
+  # override, keep the override only.  Note that the override may end up being
+  # a functools.partial, in which case we need to extract the .func to compare
+  # it to the common hooks.
+  unwrapped_hooks = [getattr(hook, 'func', hook) for hook in enabled_hooks]
+  hooks = [hook for hook in hooks if hook not in unwrapped_hooks]
+
+  hooks = list(enabled_hooks) + hooks
 
   if project in _PROJECT_SPECIFIC_HOOKS:
     hooks.extend(hook for hook in _PROJECT_SPECIFIC_HOOKS[project]

@@ -10,6 +10,7 @@ You can add new checks by adding a functions to the HOOKS constants.
 
 from __future__ import print_function
 
+import argparse
 import collections
 import ConfigParser
 import fnmatch
@@ -920,7 +921,7 @@ def _check_commit_message_style(_project, commit):
                        MAX_FIRST_LINE_LEN)
 
 
-def _check_cros_license(_project, commit):
+def _check_cros_license(_project, commit, options=()):
   """Verifies the Chromium OS license/copyright header.
 
   Should be following the spec:
@@ -944,11 +945,18 @@ def _check_cros_license(_project, commit):
   )
   copyright_re = re.compile(COPYRIGHT_LINE)
 
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--exclude_regex', action='append')
+  parser.add_argument('--include_regex', action='append')
+  opts = parser.parse_args(options)
+  included = opts.include_regex or []
+  excluded = opts.exclude_regex or []
+
   bad_files = []
   bad_copyright_files = []
   files = _filter_files(_get_affected_files(commit, relative=True),
-                        COMMON_INCLUDED_PATHS,
-                        COMMON_EXCLUDED_PATHS)
+                        included + COMMON_INCLUDED_PATHS,
+                        excluded + COMMON_EXCLUDED_PATHS)
 
   for f in files:
     contents = _get_file_content(f, commit)

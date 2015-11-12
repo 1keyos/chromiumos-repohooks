@@ -1070,9 +1070,8 @@ def _check_layout_conf(_project, commit):
         errors += ['enable %s with: %s' % (reason, line)]
 
     # Require one of these settings.
-    if ('use-manifests = true' not in data and
-        'use-manifests = strict' not in data):
-      errors += ['enable file checking with: use-manifests = true']
+    if 'use-manifests = strict' not in data:
+      errors += ['enable file checking with: use-manifests = strict']
 
     # Require repo-name to be set.
     for line in data:

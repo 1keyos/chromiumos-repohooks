@@ -600,7 +600,7 @@ class CheckLayoutConfTestCase(cros_test_lib.MockTestCase):
         'profile_eapi_when_unspecified = 5-progress',
         'repo-name = link',
         'thin-manifests = true',
-        'use-manifests = true',
+        'use-manifests = strict',
     ]
 
     lines = []

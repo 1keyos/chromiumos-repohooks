@@ -819,7 +819,11 @@ def _check_ebuild_virtual_pv(project, commit):
 
       pv = m.group(3).split('-', 1)[0]
 
-      if is_private(overlay):
+      # Virtual versions >= 4 are special cases used above the standard
+      # versioning structure, e.g. if one has a board inheriting a board.
+      if float(pv) >= 4:
+        want_pv = pv
+      elif is_private(overlay):
         want_pv = '3.5' if is_variant(overlay) else '3'
       elif is_board(overlay):
         want_pv = '2.5' if is_variant(overlay) else '2'

@@ -453,10 +453,16 @@ class CheckEbuildVirtualPv(cros_test_lib.MockTestCase):
     ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_VARIANT_OVERLAY, 'H')
     self.assertEqual(ret, None)
 
+  def testSpecialVirtuals(self):
+    """Some cases require deeper versioning and can be >= 4."""
+    template = 'virtual/foo/foo-%s.ebuild'
     self.file_mock.return_value = [template % '4']
     ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_VARIANT_OVERLAY, 'H')
-    self.assertTrue(isinstance(ret, errors.HookFailure))
+    self.assertEqual(ret, None)
 
+    self.file_mock.return_value = [template % '4.5']
+    ret = pre_upload._check_ebuild_virtual_pv(self.PRIVATE_VARIANT_OVERLAY, 'H')
+    self.assertEqual(ret, None)
 
 class CheckCrosLicenseCopyrightHeader(cros_test_lib.MockTestCase):
   """Tests for _check_cros_license."""

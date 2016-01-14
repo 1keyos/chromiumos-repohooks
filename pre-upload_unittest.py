@@ -778,6 +778,26 @@ class CheckCommitMessageCqDepend(CommitMessageTestCase):
     self.assertMessageRejected('\nCQ-DEPEND=None\n')
 
 
+class CheckCommitMessageContribution(CommitMessageTestCase):
+  """Tests for _check_change_is_contribution."""
+
+  @staticmethod
+  def CheckMessage(project, commit):
+    return pre_upload._check_change_is_contribution(project, commit)
+
+  def testNormal(self):
+    """Accept a commit message which is a contribution."""
+    self.assertMessageAccepted('\nThis is cool code I am contributing.\n')
+
+  def testFailureLowerCase(self):
+    """Deny a commit message which is not a contribution."""
+    self.assertMessageRejected('\nThis is not a contribution.\n')
+
+  def testFailureUpperCase(self):
+    """Deny a commit message which is not a contribution."""
+    self.assertMessageRejected('\nNOT A CONTRIBUTION\n')
+
+
 class CheckCommitMessageTest(CommitMessageTestCase):
   """Tests for _check_change_has_test_field."""
 

@@ -495,6 +495,15 @@ def _check_change_has_valid_cq_depend(_project, commit):
     return HookFailure(msg, [example, str(ex)])
 
 
+def _check_change_is_contribution(_project, commit):
+  """Check that the change is a contribution."""
+  NO_CONTRIB = 'not a contribution'
+  if NO_CONTRIB in _get_commit_desc(commit).lower():
+    msg = ('Changelist is not a contribution, this cannot be accepted.\n'
+           'Please remove the "%s" text from the commit message.') % NO_CONTRIB
+    return HookFailure(msg)
+
+
 def _check_change_has_bug_field(project, commit):
   """Check for a correctly formatted 'BUG=' field in the commit message."""
   OLD_BUG_RE = r'\nBUG=.*chromium-os'
@@ -1264,6 +1273,7 @@ _PATCH_DESCRIPTION_HOOKS = [
     _check_change_has_test_field,
     _check_change_has_proper_changeid,
     _check_commit_message_style,
+    _check_change_is_contribution,
 ]
 
 
@@ -1308,6 +1318,7 @@ _HOOK_FLAGS = {
     'bug_field_check': _check_change_has_bug_field,
     'test_field_check': _check_change_has_test_field,
     'manifest_check': _check_manifests,
+    'contribution_check': _check_change_is_contribution,
 }
 
 

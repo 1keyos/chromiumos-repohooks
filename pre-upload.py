@@ -769,7 +769,7 @@ def _check_ebuild_keywords(_project, commit):
 
 def _check_ebuild_licenses(_project, commit):
   """Check if the LICENSE field in the ebuild is correct."""
-  affected_paths = _get_affected_files(commit)
+  affected_paths = _get_affected_files(commit, relative=True)
   touched_ebuilds = [x for x in affected_paths if x.endswith('.ebuild')]
 
   # A list of licenses to ignore for now.
@@ -781,7 +781,8 @@ def _check_ebuild_licenses(_project, commit):
       continue
 
     try:
-      license_types = licenses_lib.GetLicenseTypesFromEbuild(ebuild)
+      ebuild_content = _get_file_content(ebuild, commit)
+      license_types = licenses_lib.GetLicenseTypesFromEbuild(ebuild_content)
     except ValueError as e:
       return HookFailure(e.message, [ebuild])
 

@@ -588,7 +588,7 @@ def _check_for_uprev(project, commit, project_top=None):
       full_details=True)
 
   # Don't yell about changes to whitelisted files...
-  whitelist = ('ChangeLog', 'Manifest', 'metadata.xml')
+  whitelist = ('ChangeLog', 'Manifest', 'metadata.xml', 'COMMIT-QUEUE.ini')
   affected_path_objs = [x for x in affected_path_objs
                         if os.path.basename(FinalName(x)) not in whitelist]
   if not affected_path_objs:

@@ -50,6 +50,7 @@ COMMON_INCLUDED_PATHS = [
     r"(^|.*[\\\/])[^.]+$",
     # Other
     r".*\.java$", r".*\.mk$", r".*\.am$",
+    r".*\.policy$", r".*\.conf$",
 ]
 
 

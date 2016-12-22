@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 # Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
@@ -75,6 +75,42 @@ class CheckNoLongLinesTest(cros_test_lib.MockTestCase):
                       failure.msg)
     self.assertEquals(['x.py, line %d, 81 chars' % line
                        for line in [3, 4, 8]],
+                      failure.items)
+
+
+class CheckTabbedIndentsTest(cros_test_lib.MockTestCase):
+  """Tests for _check_tabbed_indents."""
+  def setUp(self):
+    self.PatchObject(pre_upload, '_get_affected_files', return_value=['x.py'])
+    self.PatchObject(pre_upload, '_filter_files', return_value=['x.py'])
+    self.diff_mock = self.PatchObject(pre_upload, '_get_file_diff')
+
+  def test_good_cases(self):
+    self.diff_mock.return_value = [
+        (1, u'no_tabs_anywhere'),
+        (2, u'	leading_tab_only'),
+        (3, u'	leading_tab another_tab'),
+        (4, u'	leading_tab trailing_too	'),
+        (5, u'	leading_tab  then_spaces_trailing  '),
+    ]
+    failure = pre_upload._check_tabbed_indents(ProjectNamed('PROJECT'),
+                                               'COMMIT')
+    self.assertIsNone(failure)
+
+  def test_bad_cases(self):
+    self.diff_mock.return_value = [
+        (1, u' leading_space'),
+        (2, u'	 tab_followed_by_space'),
+        (3, u'  			space_followed_by_tab'),
+        (4, u'   			  mix_em_up'),
+        (5, u'	  		  			mix_on_both_sides			   '),
+    ]
+    failure = pre_upload._check_tabbed_indents(ProjectNamed('PROJECT'),
+                                               'COMMIT')
+    self.assertTrue(failure)
+    self.assertEquals('Found a space in indentation (must be all tabs):',
+                      failure.msg)
+    self.assertEquals(['x.py, line %d' % line for line in xrange(1, 6)],
                       failure.items)
 
 

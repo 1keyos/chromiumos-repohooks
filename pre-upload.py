@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python2
 # Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -394,6 +394,29 @@ def _get_commit_desc(commit):
   return _run_command(['git', 'log', '--format=%s%n%n%b', commit + '^!'])
 
 
+def _check_lines_in_diff(commit, files, check_callable, error_description):
+  """Checks given file for errors via the given check.
+
+  This is a convenience function for common per-line checks. It goes through all
+  files and returns a HookFailure with the error description listing all the
+  failures.
+
+  Args:
+    commit: The commit we're working on.
+    files: The files to check.
+    check_callable: A callable that takes a line and returns True if this line
+        _fails_ the check.
+    error_description: A string describing the error.
+  """
+  errors = []
+  for afile in files:
+    for line_num, line in _get_file_diff(afile, commit):
+      if check_callable(line):
+        errors.append('%s, line %s' % (afile, line_num))
+  if errors:
+    return HookFailure(error_description, errors)
+
+
 # Common Hooks
 
 
@@ -427,16 +450,12 @@ def _check_no_long_lines(_project, commit):
 
 def _check_no_stray_whitespace(_project, commit):
   """Checks that there is no stray whitespace at source lines end."""
-  errors = []
   files = _filter_files(_get_affected_files(commit),
                         COMMON_INCLUDED_PATHS,
                         COMMON_EXCLUDED_PATHS)
-  for afile in files:
-    for line_num, line in _get_file_diff(afile, commit):
-      if line.rstrip() != line:
-        errors.append('%s, line %s' % (afile, line_num))
-    if errors:
-      return HookFailure('Found line ending with white space in:', errors)
+  return _check_lines_in_diff(commit, files,
+                              lambda line: line.rstrip() != line,
+                              'Found line ending with white space in:')
 
 
 def _check_no_tabs(_project, commit):
@@ -449,17 +468,29 @@ def _check_no_tabs(_project, commit):
       r".*\.mk$"
   ]
 
-  errors = []
   files = _filter_files(_get_affected_files(commit),
                         COMMON_INCLUDED_PATHS,
                         COMMON_EXCLUDED_PATHS + TAB_OK_PATHS)
+  return _check_lines_in_diff(commit, files,
+                              lambda line: '\t' in line,
+                              'Found a tab character in:')
 
-  for afile in files:
-    for line_num, line in _get_file_diff(afile, commit):
-      if '\t' in line:
-        errors.append('%s, line %s' % (afile, line_num))
-  if errors:
-    return HookFailure('Found a tab character in:', errors)
+
+def _check_tabbed_indents(_project, commit):
+  """Checks that indents use tabs only."""
+  TABS_REQUIRED_PATHS = [
+      r".*\.ebuild$",
+      r".*\.eclass$",
+  ]
+  LEADING_SPACE_RE = re.compile('[\t]* ')
+
+  files = _filter_files(_get_affected_files(commit),
+                        TABS_REQUIRED_PATHS,
+                        COMMON_EXCLUDED_PATHS)
+  return _check_lines_in_diff(
+      commit, files,
+      lambda line: LEADING_SPACE_RE.match(line) is not None,
+      'Found a space in indentation (must be all tabs):')
 
 
 def _check_gofmt(_project, commit):
@@ -1293,6 +1324,7 @@ _COMMON_HOOKS = [
     _check_no_long_lines,
     _check_no_stray_whitespace,
     _check_no_tabs,
+    _check_tabbed_indents,
     _check_portage_make_use_var,
 ]
 
@@ -1316,6 +1348,7 @@ _HOOK_FLAGS = {
     'cros_license_check': _check_cros_license,
     'aosp_license_check': _check_aosp_license,
     'tab_check': _check_no_tabs,
+    'tabbed_indent_required_check': _check_tabbed_indents,
     'branch_check': _check_change_has_branch_field,
     'signoff_check': _check_change_has_signoff_field,
     'bug_field_check': _check_change_has_bug_field,

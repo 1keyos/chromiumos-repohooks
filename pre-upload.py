@@ -243,11 +243,12 @@ def _get_file_content(path, commit):
 
 def _get_file_diff(path, commit):
   """Returns a list of (linenum, lines) tuples that the commit touched."""
-  command = ['git', 'diff', '-p', '--pretty=format:', '--no-ext-diff']
   if commit == PRE_SUBMIT:
-    command += ['HEAD', path]
+    command = ['git', 'diff', '-p', '--pretty=format:', '--no-ext-diff', 'HEAD',
+               path]
   else:
-    command += [commit, path]
+    command = ['git', 'show', '-p', '--pretty=format:', '--no-ext-diff', commit,
+               path]
   output = _run_command(command)
 
   new_lines = []

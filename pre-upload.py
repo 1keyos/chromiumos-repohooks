@@ -20,6 +20,7 @@ import os
 import re
 import sys
 import stat
+import StringIO
 
 from errors import (VerifyException, HookFailure, PrintErrorForProject,
                     PrintErrorsForCommit)
@@ -31,6 +32,7 @@ if __name__ in ('__builtin__', '__main__'):
   sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), '..', '..'))
 
 from chromite.lib import commandline
+from chromite.lib import constants
 from chromite.lib import cros_build_lib
 from chromite.lib import git
 from chromite.lib import osutils
@@ -1229,6 +1231,28 @@ def _check_change_has_signoff_field(_project, commit):
     return HookFailure(msg)
 
 
+def _check_cq_ini_well_formed(_project, commit):
+  """Check that any modified COMMIT-QUEUE.ini files are well formed."""
+  pattern = '.*' + constants.CQ_CONFIG_FILENAME
+  files = _filter_files(_get_affected_files(commit), (pattern,))
+
+  # TODO(akeshet): Check not only that the file is parseable, but that all the
+  # pre-cq configs it requests are existing ones.
+  for f in files:
+    try:
+      parser = ConfigParser.SafeConfigParser()
+      # Prior to python3, ConfigParser has no read_string method, so we must
+      # pass it either a file path or file like object. And we must use
+      # _get_file_content to fetch file contents to ensure we are examining the
+      # commit diff, rather than whatever's on disk.
+      contents = _get_file_content(f, commit)
+      parser.readfp(StringIO.StringIO(contents))
+    except ConfigParser.Error as e:
+      msg = ('Unable to parse COMMIT-QUEUE.ini file at %s due to %s.' %
+             (f, e))
+      return HookFailure(msg)
+
+
 def _run_project_hook_script(script, project, commit):
   """Runs a project hook script.
 
@@ -1313,6 +1337,8 @@ _PATCH_DESCRIPTION_HOOKS = [
 
 # A list of hooks that are not project-specific
 _COMMON_HOOKS = [
+    _check_cq_ini_well_formed,
+    _check_cros_license,
     _check_ebuild_eapi,
     _check_ebuild_keywords,
     _check_ebuild_licenses,
@@ -1320,12 +1346,11 @@ _COMMON_HOOKS = [
     _check_for_uprev,
     _check_gofmt,
     _check_layout_conf,
-    _check_cros_license,
     _check_no_long_lines,
     _check_no_stray_whitespace,
     _check_no_tabs,
-    _check_tabbed_indents,
     _check_portage_make_use_var,
+    _check_tabbed_indents,
 ]
 
 

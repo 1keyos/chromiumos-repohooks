@@ -1105,6 +1105,50 @@ class HelpersTest(cros_test_lib.MockTempDirTestCase):
     ])
     self.assertEquals(pre_upload._get_affected_files('HEAD', relative=True), [])
 
+
+class ExecFilesTest(cros_test_lib.MockTestCase):
+  """Tests for _check_exec_files."""
+
+  def setUp(self):
+    self.diff_mock = self.PatchObject(git, 'RawDiff')
+
+  def testNotExec(self):
+    """Do not flag files that are not executable."""
+    self.diff_mock.return_value = [
+        DiffEntry(src_file='make.conf', dst_mode='100644', status='A'),
+    ]
+    self.assertEqual(pre_upload._check_exec_files('proj', 'commit'), None)
+
+  def testExec(self):
+    """Flag files that are executable."""
+    self.diff_mock.return_value = [
+        DiffEntry(src_file='make.conf', dst_mode='100755', status='A'),
+    ]
+    self.assertNotEqual(pre_upload._check_exec_files('proj', 'commit'), None)
+
+  def testDeletedExec(self):
+    """Ignore bad files that are being deleted."""
+    self.diff_mock.return_value = [
+        DiffEntry(src_file='make.conf', dst_mode='100755', status='D'),
+    ]
+    self.assertEqual(pre_upload._check_exec_files('proj', 'commit'), None)
+
+  def testModifiedExec(self):
+    """Flag bad files that weren't exec, but now are."""
+    self.diff_mock.return_value = [
+        DiffEntry(src_file='make.conf', src_mode='100644', dst_mode='100755',
+                  status='M'),
+    ]
+    self.assertNotEqual(pre_upload._check_exec_files('proj', 'commit'), None)
+
+  def testNormalExec(self):
+    """Don't flag normal files (e.g. scripts) that are executable."""
+    self.diff_mock.return_value = [
+        DiffEntry(src_file='foo.sh', dst_mode='100755', status='A'),
+    ]
+    self.assertEqual(pre_upload._check_exec_files('proj', 'commit'), None)
+
+
 class CheckForUprev(cros_test_lib.MockTempDirTestCase):
   """Tests for _check_for_uprev."""
 

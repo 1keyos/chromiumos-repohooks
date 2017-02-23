@@ -1321,6 +1321,79 @@ def _check_project_prefix(_project, commit):
                        % (project_name, project_name))
 
 
+def _check_exec_files(_project, commit):
+  """Make +x bits on files."""
+  # List of files that should never be +x.
+  NO_EXEC = (
+      'ChangeLog*',
+      'COPYING',
+      'make.conf',
+      'make.defaults',
+      'Manifest',
+      'OWNERS',
+      'package.use',
+      'package.keywords',
+      'package.mask',
+      'parent',
+      'README',
+      'TODO',
+      '.gitignore',
+      '*.[achly]',
+      '*.[ch]xx',
+      '*.boto',
+      '*.cc',
+      '*.cfg',
+      '*.conf',
+      '*.config',
+      '*.cpp',
+      '*.css',
+      '*.ebuild',
+      '*.eclass',
+      '*.gyp',
+      '*.gypi',
+      '*.htm',
+      '*.html',
+      '*.ini',
+      '*.js',
+      '*.json',
+      '*.md',
+      '*.mk',
+      '*.patch',
+      '*.policy',
+      '*.proto',
+      '*.raw',
+      '*.rules',
+      '*.service',
+      '*.target',
+      '*.txt',
+      '*.xml',
+      '*.yaml',
+  )
+
+  def FinalName(obj):
+    # If the file is being deleted, then the dst_file is not set.
+    if obj.dst_file is None:
+      return obj.src_file
+    else:
+      return obj.dst_file
+
+  bad_files = []
+  files = _get_affected_files(commit, relative=True, full_details=True)
+  for f in files:
+    mode = int(f.dst_mode, 8)
+    if not mode & 0o111:
+      continue
+    name = FinalName(f)
+    for no_exec in NO_EXEC:
+      if fnmatch.fnmatch(name, no_exec):
+        bad_files.append(name)
+        break
+
+  if bad_files:
+    return HookFailure('These files should not be executable.  '
+                       'Please `chmod -x` them.', bad_files)
+
+
 # Base
 
 # A list of hooks which are not project specific and check patch description
@@ -1343,6 +1416,7 @@ _COMMON_HOOKS = [
     _check_ebuild_keywords,
     _check_ebuild_licenses,
     _check_ebuild_virtual_pv,
+    _check_exec_files,
     _check_for_uprev,
     _check_gofmt,
     _check_layout_conf,

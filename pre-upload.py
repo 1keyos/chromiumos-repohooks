@@ -938,12 +938,22 @@ def _check_change_has_proper_changeid(_project, commit):
   desc = _get_commit_desc(commit)
   m = re.search(CHANGE_ID_RE, desc)
   if not m:
-    return HookFailure('Change-Id must be in last paragraph of description.')
+    return HookFailure('Last paragraph of description must include Change-Id.')
 
-  # Allow s-o-b tags to follow it, but only those.
+  # S-o-b tags always allowed to follow Change-ID.
+  allowed_tags = ['Signed-off-by']
+
   end = desc[m.end():].strip().splitlines()
-  if [x for x in end if not x.startswith('Signed-off-by: ')]:
-    return HookFailure('Only "Signed-off-by:" tags may follow the Change-Id.')
+  if end and end[-1].startswith('(cherry picked from commit'):
+    # Cherry picked patches allow more tags in the last paragraph.
+    allowed_tags += ['Reviewed-on', 'Reviewed-by', 'Commit-Ready', 'Tested-by']
+    end = end[:-1]
+
+  tag_search = '^(%s): ' % '|'.join(allowed_tags)
+
+  if [x for x in end if not re.search(tag_search, x)]:
+    return HookFailure('Only "%s:" tag(s) may follow the Change-Id.' %
+                       ':", "'.join(allowed_tags))
 
 
 def _check_commit_message_style(_project, commit):

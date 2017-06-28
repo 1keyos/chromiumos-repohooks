@@ -74,6 +74,10 @@ COMMON_EXCLUDED_PATHS = [
     r"(^|.*/)overlay-.*/profiles/.*",
     r"^profiles/.*$",
 
+    # Ignore config files in ebuild setup.
+    r"(^|.*/)overlay-.*/chromeos-base/chromeos-bsp.*/files/.*",
+    r"^chromeos-base/chromeos-bsp.*/files/.*",
+
     # Ignore minified js and jquery.
     r".*\.min\.js",
     r".*jquery.*\.js",

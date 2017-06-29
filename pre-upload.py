@@ -468,6 +468,7 @@ def _check_no_tabs(_project, commit):
   """Checks there are no unexpanded tabs."""
   TAB_OK_PATHS = [
       r"/src/third_party/u-boot/",
+      r"/src/third_party/bluez/",
       r".*\.ebuild$",
       r".*\.eclass$",
       r".*/[M|m]akefile$",

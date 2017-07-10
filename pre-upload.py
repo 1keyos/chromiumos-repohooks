@@ -423,10 +423,28 @@ def _check_lines_in_diff(commit, files, check_callable, error_description):
     return HookFailure(error_description, errors)
 
 
+def _parse_common_inclusion_options(options):
+  """Parses common hook options for including/excluding files.
+
+  Args:
+    options: Option string list.
+
+  Returns:
+    (included, excluded) where each one is a list of regex strings.
+  """
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--exclude_regex', action='append')
+  parser.add_argument('--include_regex', action='append')
+  opts = parser.parse_args(options)
+  included = opts.include_regex or []
+  excluded = opts.exclude_regex or []
+  return included, excluded
+
+
 # Common Hooks
 
 
-def _check_no_long_lines(_project, commit):
+def _check_no_long_lines(_project, commit, options=()):
   """Checks there are no lines longer than MAX_LEN in any of the text files."""
 
   MAX_LEN = 80
@@ -434,11 +452,12 @@ def _check_no_long_lines(_project, commit):
       r'https?://',
       r'^#\s*(define|include|import|pragma|if|endif)\b']))
 
-  errors = []
+  included, excluded = _parse_common_inclusion_options(options)
   files = _filter_files(_get_affected_files(commit),
-                        COMMON_INCLUDED_PATHS,
-                        COMMON_EXCLUDED_PATHS)
+                        included + COMMON_INCLUDED_PATHS,
+                        excluded + COMMON_EXCLUDED_PATHS)
 
+  errors = []
   for afile in files:
     for line_num, line in _get_file_diff(afile, commit):
       # Allow certain lines to exceed the maxlen rule.
@@ -454,17 +473,18 @@ def _check_no_long_lines(_project, commit):
     return HookFailure(msg, errors)
 
 
-def _check_no_stray_whitespace(_project, commit):
+def _check_no_stray_whitespace(_project, commit, options=()):
   """Checks that there is no stray whitespace at source lines end."""
+  included, excluded = _parse_common_inclusion_options(options)
   files = _filter_files(_get_affected_files(commit),
-                        COMMON_INCLUDED_PATHS,
-                        COMMON_EXCLUDED_PATHS)
+                        included + COMMON_INCLUDED_PATHS,
+                        excluded + COMMON_EXCLUDED_PATHS)
   return _check_lines_in_diff(commit, files,
                               lambda line: line.rstrip() != line,
                               'Found line ending with white space in:')
 
 
-def _check_no_tabs(_project, commit):
+def _check_no_tabs(_project, commit, options=()):
   """Checks there are no unexpanded tabs."""
   TAB_OK_PATHS = [
       r"/src/third_party/u-boot/",
@@ -475,15 +495,16 @@ def _check_no_tabs(_project, commit):
       r".*\.mk$"
   ]
 
+  included, excluded = _parse_common_inclusion_options(options)
   files = _filter_files(_get_affected_files(commit),
-                        COMMON_INCLUDED_PATHS,
-                        COMMON_EXCLUDED_PATHS + TAB_OK_PATHS)
+                        included + COMMON_INCLUDED_PATHS,
+                        excluded + COMMON_EXCLUDED_PATHS + TAB_OK_PATHS)
   return _check_lines_in_diff(commit, files,
                               lambda line: '\t' in line,
                               'Found a tab character in:')
 
 
-def _check_tabbed_indents(_project, commit):
+def _check_tabbed_indents(_project, commit, options=()):
   """Checks that indents use tabs only."""
   TABS_REQUIRED_PATHS = [
       r".*\.ebuild$",
@@ -491,9 +512,10 @@ def _check_tabbed_indents(_project, commit):
   ]
   LEADING_SPACE_RE = re.compile('[\t]* ')
 
+  included, excluded = _parse_common_inclusion_options(options)
   files = _filter_files(_get_affected_files(commit),
-                        TABS_REQUIRED_PATHS,
-                        COMMON_EXCLUDED_PATHS)
+                        included + TABS_REQUIRED_PATHS,
+                        excluded + COMMON_EXCLUDED_PATHS)
   return _check_lines_in_diff(
       commit, files,
       lambda line: LEADING_SPACE_RE.match(line) is not None,
@@ -1009,12 +1031,7 @@ def _check_cros_license(_project, commit, options=()):
   )
   copyright_re = re.compile(COPYRIGHT_LINE)
 
-  parser = argparse.ArgumentParser()
-  parser.add_argument('--exclude_regex', action='append')
-  parser.add_argument('--include_regex', action='append')
-  opts = parser.parse_args(options)
-  included = opts.include_regex or []
-  excluded = opts.exclude_regex or []
+  included, excluded = _parse_common_inclusion_options(options)
 
   bad_files = []
   bad_copyright_files = []

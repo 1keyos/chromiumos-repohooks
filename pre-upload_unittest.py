@@ -54,11 +54,10 @@ class CheckNoLongLinesTest(cros_test_lib.MockTestCase):
   """Tests for _check_no_long_lines."""
 
   def setUp(self):
-    self.PatchObject(pre_upload, '_get_affected_files', return_value=['x.py'])
-    self.PatchObject(pre_upload, '_filter_files', return_value=['x.py'])
     self.diff_mock = self.PatchObject(pre_upload, '_get_file_diff')
 
-  def runTest(self):
+  def testCheck(self):
+    self.PatchObject(pre_upload, '_get_affected_files', return_value=['x.py'])
     self.diff_mock.return_value = [
         (1, u"x" * 80),                      # OK
         (2, "\x80" * 80),                    # OK
@@ -77,12 +76,33 @@ class CheckNoLongLinesTest(cros_test_lib.MockTestCase):
                        for line in [3, 4, 8]],
                       failure.items)
 
+  def testIncludeOptions(self):
+    self.PatchObject(pre_upload,
+                     '_get_affected_files',
+                     return_value=['foo.txt'])
+    self.diff_mock.return_value = [(1, u"x" * 81)]
+    self.assertFalse(pre_upload._check_no_long_lines(
+        ProjectNamed('PROJECT'), 'COMMIT'))
+    self.assertTrue(pre_upload._check_no_long_lines(
+        ProjectNamed('PROJECT'), 'COMMIT', options=['--include_regex=foo']))
+
+  def testExcludeOptions(self):
+    self.PatchObject(pre_upload,
+                     '_get_affected_files',
+                     return_value=['foo.py'])
+    self.diff_mock.return_value = [(1, u"x" * 81)]
+    self.assertTrue(pre_upload._check_no_long_lines(
+        ProjectNamed('PROJECT'), 'COMMIT'))
+    self.assertFalse(pre_upload._check_no_long_lines(
+        ProjectNamed('PROJECT'), 'COMMIT', options=['--exclude_regex=foo']))
+
 
 class CheckTabbedIndentsTest(cros_test_lib.MockTestCase):
   """Tests for _check_tabbed_indents."""
   def setUp(self):
-    self.PatchObject(pre_upload, '_get_affected_files', return_value=['x.py'])
-    self.PatchObject(pre_upload, '_filter_files', return_value=['x.py'])
+    self.PatchObject(pre_upload,
+                     '_get_affected_files',
+                     return_value=['x.ebuild'])
     self.diff_mock = self.PatchObject(pre_upload, '_get_file_diff')
 
   def test_good_cases(self):
@@ -110,7 +130,7 @@ class CheckTabbedIndentsTest(cros_test_lib.MockTestCase):
     self.assertTrue(failure)
     self.assertEquals('Found a space in indentation (must be all tabs):',
                       failure.msg)
-    self.assertEquals(['x.py, line %d' % line for line in xrange(1, 6)],
+    self.assertEquals(['x.ebuild, line %d' % line for line in xrange(1, 6)],
                       failure.items)
 
 

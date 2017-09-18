@@ -1248,6 +1248,13 @@ class CheckForUprev(cros_test_lib.MockTempDirTestCase):
     self.assertAccepted([DiffEntry(src_file='c/p/files/f', status='M'),
                          DiffEntry(src_file='c/p/p-9999.ebuild', status='M')])
 
+  def testModifiedFilesIn9999SubDirWithout9999Change(self):
+    """Accept changes in files/ with a parent 9999 ebuild"""
+    ebuild_9999_file = os.path.join(self.tempdir, 'c/p/p-9999.ebuild')
+    os.makedirs(os.path.dirname(ebuild_9999_file))
+    osutils.WriteFile(ebuild_9999_file, 'fake')
+    self.assertAccepted([DiffEntry(src_file='c/p/files/f', status='M')])
+
 
 class DirectMainTest(cros_test_lib.MockTempDirTestCase):
   """Tests for direct_main()"""

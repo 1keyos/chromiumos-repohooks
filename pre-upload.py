@@ -698,6 +698,17 @@ def _check_for_uprev(project, commit, project_top=None):
                for path in contents if path.endswith('.ebuild')]
     ebuilds_9999 = [path for path in ebuilds if path.endswith('-9999.ebuild')]
 
+    affected_paths_under_9999_ebuilds = set()
+    for affected_path in affected_paths:
+      for ebuild_9999 in ebuilds_9999:
+        ebuild_dir = os.path.dirname(ebuild_9999)
+        if affected_path.startswith(ebuild_dir):
+          affected_paths_under_9999_ebuilds.add(affected_path)
+
+    # If every file changed exists under a 9999 ebuild, then skip
+    if len(affected_paths_under_9999_ebuilds) == len(affected_paths):
+      continue
+
     # If the -9999.ebuild file was touched the bot will uprev for us.
     # ...we'll use a simple intersection here as a heuristic...
     if set(ebuilds_9999) & affected_paths:

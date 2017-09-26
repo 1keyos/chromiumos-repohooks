@@ -1189,6 +1189,26 @@ def _check_layout_conf(_project, commit):
 # Project-specific hooks
 
 
+def _check_clang_format(_project, commit, options=()):
+  """Runs clang-format on the given project"""
+  hooks_dir = _get_hooks_dir()
+  options = list(options)
+  if commit == PRE_SUBMIT:
+    options.append('--commit=HEAD')
+  else:
+    options.extend(['--commit', commit])
+  cmd = ['%s/clang-format.py' % hooks_dir] + options
+  cmd_result = cros_build_lib.RunCommand(cmd=cmd,
+                                         print_cmd=False,
+                                         input=_get_patch(commit),
+                                         stdout_to_pipe=True,
+                                         combine_stdout_stderr=True,
+                                         error_code_ok=True)
+  if cmd_result.returncode:
+    return HookFailure('clang-format.py errors/warnings\n\n' +
+                       cmd_result.output)
+
+
 def _run_checkpatch(_project, commit, options=()):
   """Runs checkpatch.pl on the given project"""
   hooks_dir = _get_hooks_dir()
@@ -1487,6 +1507,7 @@ _PROJECT_SPECIFIC_HOOKS = {
 # A dictionary of flags (keys) that can appear in the config file, and the hook
 # that the flag controls (value).
 _HOOK_FLAGS = {
+    'clang_format_check': _check_clang_format,
     'checkpatch_check': _run_checkpatch,
     'stray_whitespace_check': _check_no_stray_whitespace,
     'json_check': _run_json_check,

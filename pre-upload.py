@@ -588,12 +588,10 @@ def _check_change_has_bug_field(project, commit):
              'BUG=None')
       return HookFailure(msg)
   else:
-    BUG_RE = r'\nBUG=([Nn]one|(chrome-os-partner|chromium|brillo|b):\d+)'
+    BUG_RE = r'\nBUG=([Nn]one|(chromium|b):\d+)'
     if not re.search(BUG_RE, _get_commit_desc(commit)):
       msg = ('Changelist description needs BUG field (after first line):\n'
-             'BUG=brillo:9999 (for Brillo tracker)\n'
              'BUG=chromium:9999 (for public tracker)\n'
-             'BUG=chrome-os-partner:9999 (for partner tracker)\n'
              'BUG=b:9999 (for buganizer)\n'
              'BUG=None')
       return HookFailure(msg)

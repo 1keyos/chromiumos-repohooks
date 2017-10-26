@@ -486,8 +486,9 @@ def _check_no_stray_whitespace(_project, commit, options=()):
 
 def _check_no_tabs(_project, commit, options=()):
   """Checks there are no unexpanded tabs."""
+  # Don't add entire repos here.  Update the PRESUBMIT.cfg in each repo instead.
+  # We only whitelist known specific filetypes here that show up in all repos.
   TAB_OK_PATHS = [
-      r"/src/third_party/u-boot/",
       r".*\.ebuild$",
       r".*\.eclass$",
       r".*/[M|m]akefile$",

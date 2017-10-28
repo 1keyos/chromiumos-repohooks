@@ -803,8 +803,6 @@ class CheckCommitMessageBug(CommitMessageTestCase):
   def testNormal(self):
     """Accept a commit message w/a valid BUG."""
     self.assertMessageAccepted('\nBUG=chromium:1234\n', self.CROS_PROJECT)
-    self.assertMessageAccepted('\nBUG=chrome-os-partner:1234\n',
-                               self.CROS_PROJECT)
     self.assertMessageAccepted('\nBUG=b:1234\n', self.CROS_PROJECT)
 
     self.assertMessageAccepted('\nBug: 1234\n', self.AOSP_PROJECT)
@@ -841,6 +839,8 @@ class CheckCommitMessageBug(CommitMessageTestCase):
 
   def testOldTrackers(self):
     """Reject commit messages using old trackers."""
+    self.assertMessageRejected('\nBUG=chrome-os-partner:1234\n',
+                               self.CROS_PROJECT)
     self.assertMessageRejected('\nBUG=chromium-os:1234\n', self.CROS_PROJECT)
 
   def testNoTrackers(self):

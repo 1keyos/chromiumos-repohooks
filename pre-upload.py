@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 # Copyright (c) 2012 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -1435,6 +1436,7 @@ def _get_override_hooks(config):
       try:
         options = config.get(SECTION_OPTIONS, flag)
         hooks[flag] = functools.partial(hooks[flag], options=options.split())
+        hooks[flag].__name__ = flag
       except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
         pass
 
@@ -1453,9 +1455,7 @@ def _get_project_hook_scripts(config):
   if not config.has_section(SECTION):
     return []
 
-  hook_names_values = config.items(SECTION)
-  hook_names_values.sort(key=lambda x: x[0])
-  return [x[1] for x in hook_names_values]
+  return config.items(SECTION)
 
 
 def _get_project_hooks(project, presubmit):
@@ -1495,8 +1495,10 @@ def _get_project_hooks(project, presubmit):
     hooks.extend(hook for hook in _PROJECT_SPECIFIC_HOOKS[project]
                  if hook not in disabled_hooks)
 
-  for script in _get_project_hook_scripts(config):
-    hooks.append(functools.partial(_run_project_hook_script, script))
+  for name, script in _get_project_hook_scripts(config):
+    func = functools.partial(_run_project_hook_script, script)
+    func.__name__ = name
+    hooks.append(func)
 
   return hooks
 
@@ -1555,10 +1557,17 @@ def _run_project_hooks(project_name, proj_dir=None,
 
   hooks = _get_project_hooks(project.name, presubmit)
   error_found = False
-  for commit in commit_list:
+  commit_count = len(commit_list)
+  for i, commit in enumerate(commit_list):
     error_list = []
     for hook in hooks:
+      output = ('PRESUBMIT.cfg: [%i/%i]: %s: Running %s' %
+                (i + 1, commit_count, commit, hook.__name__))
+      print(output, end='\r')
+      sys.stdout.flush()
       hook_error = hook(project, commit)
+      print(' ' * len(output), end='\r')
+      sys.stdout.flush()
       if hook_error:
         error_list.append(hook_error)
         error_found = True

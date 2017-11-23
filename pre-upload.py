@@ -58,15 +58,6 @@ COMMON_INCLUDED_PATHS = [
 
 
 COMMON_EXCLUDED_PATHS = [
-    # Avoid doing source file checks for kernel.
-    r"/src/third_party/kernel/",
-    r"/src/third_party/kernel-next/",
-    r"/src/third_party/ktop/",
-    r"/src/third_party/punybench/",
-    r".*\bexperimental[\\\/].*",
-    r".*\b[A-Z0-9_]{2,}$",
-    r".*[\\\/]debian[\\\/]rules$",
-
     # For ebuild trees, ignore any caches and manifest data.
     r".*/Manifest$",
     r".*/metadata/[^/]*cache[^/]*/[^/]+/[^/]+$",

@@ -1249,24 +1249,47 @@ def _run_json_check(_project, commit):
 
 
 def _check_manifests(_project, commit):
-  """Make sure Manifest files only have DIST lines"""
-  paths = []
+  """Make sure Manifest files only have comments & DIST lines."""
+  ret = []
 
-  for path in _get_affected_files(commit):
-    if os.path.basename(path) != 'Manifest':
+  manifests = _filter_files(_get_affected_files(commit, relative=True),
+                            [r'.*/Manifest$'])
+  for path in manifests:
+    data = _get_file_content(path, commit)
+
+    # Disallow blank files.
+    if not data.strip():
+      ret.append('%s: delete empty file' % (path,))
       continue
-    if not os.path.exists(path):
-      continue
 
-    with open(path, 'r') as f:
-      for line in f.readlines():
-        if not line.startswith('DIST '):
-          paths.append(path)
-          break
+    # Make sure the last newline isn't omitted.
+    if data[-1] != '\n':
+      ret.append('%s: missing trailing newline' % (path,))
 
-  if paths:
-    return HookFailure('Please remove lines that do not start with DIST:\n%s' %
-                       ('\n'.join(paths),))
+    # Do not allow leading or trailing blank lines.
+    lines = data.splitlines()
+    if not lines[0]:
+      ret.append('%s: delete leading blank lines' % (path,))
+    if not lines[-1]:
+      ret.append('%s: delete trailing blank lines' % (path,))
+
+    for line in lines:
+      # Disallow leading/trailing whitespace.
+      if line != line.strip():
+        ret.append('%s: remove leading/trailing whitespace: %s' % (path, line))
+
+      # Allow blank lines & comments.
+      line = line.split('#', 1)[0]
+      if not line:
+        continue
+
+      # All other linse should start with DIST.
+      if not line.startswith('DIST '):
+        ret.append('%s: remove non-DIST lines: %s' % (path, line))
+        break
+
+  if ret:
+    return HookFailure('\n'.join(ret))
 
 
 def _check_change_has_branch_field(_project, commit):

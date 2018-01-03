@@ -222,6 +222,79 @@ class CheckKernelConfig(cros_test_lib.MockTestCase):
     self.assertFalse(failure)
 
 
+class CheckManifests(cros_test_lib.MockTestCase):
+  """Tests _check_manifests."""
+
+  def setUp(self):
+    self.file_mock = self.PatchObject(pre_upload, '_get_affected_files')
+    self.content_mock = self.PatchObject(pre_upload, '_get_file_content')
+
+  def testNoManifests(self):
+    """Nothing should be checked w/no Manifest files."""
+    self.file_mock.return_value = [
+        '/foo/bar.txt',
+        '/readme.md',
+        '/manifest',
+        '/Manifest.txt',
+    ]
+    ret = pre_upload._check_manifests('PROJECT', 'COMMIT')
+    self.assertIsNone(ret)
+
+  def testValidManifest(self):
+    """Accept valid Manifest files."""
+    self.file_mock.return_value = [
+        '/foo/bar.txt',
+        '/cat/pkg/Manifest',
+    ]
+    self.content_mock.return_value = '''# Comment and blank lines.
+
+DIST lines
+'''
+    ret = pre_upload._check_manifests('PROJECT', 'COMMIT')
+    self.assertIsNone(ret)
+    self.content_mock.assert_called_once_with('/cat/pkg/Manifest', 'COMMIT')
+
+  def _testReject(self, content):
+    """Make sure |content| is rejected."""
+    self.file_mock.return_value = ('/Manifest',)
+    self.content_mock.reset_mock()
+    self.content_mock.return_value = content
+    ret = pre_upload._check_manifests('PROJECT', 'COMMIT')
+    self.assertIsNotNone(ret)
+    self.content_mock.assert_called_once_with('/Manifest', 'COMMIT')
+
+  def testRejectBlank(self):
+    """Reject empty manifests."""
+    self._testReject('')
+
+  def testNoTrailingNewLine(self):
+    """Reject manifests w/out trailing newline."""
+    self._testReject('DIST foo')
+
+  def testNoLeadingBlankLines(self):
+    """Reject manifests w/leading blank lines."""
+    self._testReject('\nDIST foo\n')
+
+  def testNoTrailingBlankLines(self):
+    """Reject manifests w/trailing blank lines."""
+    self._testReject('DIST foo\n\n')
+
+  def testNoLeadingWhitespace(self):
+    """Reject manifests w/lines w/leading spaces."""
+    self._testReject(' DIST foo\n')
+    self._testReject('  # Comment\n')
+
+  def testNoTrailingWhitespace(self):
+    """Reject manifests w/lines w/trailing spaces."""
+    self._testReject('DIST foo \n')
+    self._testReject('# Comment \n')
+    self._testReject('  \n')
+
+  def testOnlyDistLines(self):
+    """Only allow DIST lines in here."""
+    self._testReject('EBUILD foo\n')
+
+
 class CheckConfigParsing(cros_test_lib.MockTestCase):
   """Tests _check_cq_ini_well_formed."""
 

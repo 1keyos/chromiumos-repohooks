@@ -236,6 +236,11 @@ def _get_file_content(path, commit):
   if commit == PRE_SUBMIT:
     return _run_command(['git', 'diff', 'HEAD', path])
   else:
+    # Make sure people don't accidentally pass in full paths which will never
+    # work.  You need to use relative=True with _get_affected_files.
+    if path.startswith('/'):
+      raise ValueError('_get_file_content must be called with relative paths: '
+                       + path)
     return _run_command(['git', 'show', '%s:%s' % (commit, path)])
 
 
@@ -1291,7 +1296,7 @@ def _check_change_has_signoff_field(_project, commit):
 def _check_cq_ini_well_formed(_project, commit):
   """Check that any modified COMMIT-QUEUE.ini files are well formed."""
   pattern = '.*' + constants.CQ_CONFIG_FILENAME
-  files = _filter_files(_get_affected_files(commit), (pattern,))
+  files = _filter_files(_get_affected_files(commit, relative=True), (pattern,))
 
   # TODO(akeshet): Check not only that the file is parseable, but that all the
   # pre-cq configs it requests are existing ones.

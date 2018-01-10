@@ -1646,10 +1646,12 @@ def direct_main(argv):
                       'specified, the repo tool will be used to figure this '
                       'out based on the dir.')
   parser.add_argument('--rerun-since', default=None,
-                      help='Rerun hooks on old commits since the given date.  '
-                      'The date should match git log\'s concept of a date.  '
-                      'e.g. 2012-06-20. This option is mutually exclusive '
-                      'with --pre-submit.')
+                      help='Rerun hooks on old commits since some point '
+                      'in the past.  The argument could be a date (should '
+                      'match git log\'s concept of a date, e.g. 2012-06-20), '
+                      'or a SHA1, or just a number of commits to check (from 1 '
+                      'to 99).  This option is mutually exclusive with '
+                      '--pre-submit.')
   parser.add_argument('--pre-submit', action="store_true",
                       help='Run the check against the pending commit.  '
                       'This option should be used at the \'git commit\' '
@@ -1664,7 +1666,16 @@ def direct_main(argv):
       raise BadInvocation('Can\'t pass commits and use rerun-since: %s' %
                           ' '.join(opts.commits))
 
-    cmd = ['git', 'log', '--since="%s"' % opts.rerun_since, '--pretty=%H']
+    if len(opts.rerun_since) < 3 and opts.rerun_since.isdigit():
+      # This must be the number of commits to check. We don't expect the user
+      # to want to check more than 99 commits.
+      limit = '-n%s' % opts.rerun_since
+    elif git.IsSHA1(opts.rerun_since, False):
+      limit = '%s..' %  opts.rerun_since
+    else:
+      # This better be a date.
+      limit = '--since=%s' % opts.rerun_since
+    cmd = ['git', 'log', limit, '--pretty=%H']
     all_commits = _run_command(cmd).splitlines()
     bot_commits = _run_command(cmd + ['--author=chrome-bot']).splitlines()
 

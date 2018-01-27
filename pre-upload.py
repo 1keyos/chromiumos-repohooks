@@ -1071,7 +1071,7 @@ def _check_cros_license(_project, commit, options=()):
     return HookFailure(msg, bad_copyright_files)
 
 
-def _check_aosp_license(_project, commit):
+def _check_aosp_license(_project, commit, options=()):
   """Verifies the AOSP license/copyright header.
 
   AOSP uses the Apache2 License:
@@ -1098,9 +1098,11 @@ def _check_aosp_license(_project, commit):
   )
   license_re = re.compile(LICENSE_HEADER, re.MULTILINE)
 
+  included, excluded = _parse_common_inclusion_options(options)
+
   files = _filter_files(_get_affected_files(commit, relative=True),
-                        COMMON_INCLUDED_PATHS,
-                        COMMON_EXCLUDED_PATHS)
+                        included + COMMON_INCLUDED_PATHS,
+                        excluded + COMMON_EXCLUDED_PATHS)
 
   bad_files = []
   for f in files:

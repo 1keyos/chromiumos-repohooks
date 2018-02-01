@@ -718,7 +718,7 @@ def _check_for_uprev(project, commit, project_top=None):
 
 
 def _check_ebuild_eapi(project, commit):
-  """Make sure we have people use EAPI=4 or newer with custom ebuilds.
+  """Make sure we have people use EAPI=5 or newer with custom ebuilds.
 
   We want to get away from older EAPI's as it makes life confusing and they
   have less builtin error checking.
@@ -739,7 +739,7 @@ def _check_ebuild_eapi(project, commit):
   if project.name in whitelist:
     return None
 
-  BAD_EAPIS = ('0', '1', '2', '3')
+  BAD_EAPIS = ('0', '1', '2', '3', '4')
 
   get_eapi = re.compile(r'^\s*EAPI=[\'"]?([^\'"]+)')
 
@@ -777,7 +777,7 @@ def _check_ebuild_eapi(project, commit):
     return HookFailure(
         'These ebuilds are using old EAPIs.  If these are imported from\n'
         'Gentoo, then you may ignore and upload once with the --no-verify\n'
-        'flag.  Otherwise, please update to 4 or newer.\n'
+        'flag.  Otherwise, please update to 5 or newer.\n'
         '\t%s\n'
         'See this guide for more details:\n%s\n' %
         ('\n\t'.join(['%s: EAPI=%s' % x for x in bad_ebuilds]), url))

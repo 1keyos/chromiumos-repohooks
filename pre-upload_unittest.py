@@ -444,7 +444,7 @@ IUSE="foo"
 src_compile() { }
 """
     # Make sure we only check the first EAPI= setting.
-    self.content_mock.return_value = template % '1\nEAPI=4'
+    self.content_mock.return_value = template % '1\nEAPI=60'
     ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
@@ -458,7 +458,7 @@ src_compile() { }
     ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertTrue(isinstance(ret, errors.HookFailure))
 
-  def testAcceptExplicitEapi4Content(self):
+  def testAcceptExplicitNewEapiContent(self):
     """Accept ebuilds that do declare new EAPI explicitly."""
     self.file_mock.return_value = ['a.ebuild']
 
@@ -468,7 +468,7 @@ IUSE="foo"
 src_compile() { }
 """
     # Make sure we only check the first EAPI= setting.
-    self.content_mock.return_value = template % '4\nEAPI=1'
+    self.content_mock.return_value = template % '6\nEAPI=1'
     ret = pre_upload._check_ebuild_eapi(ProjectNamed('overlay'), 'HEAD')
     self.assertEqual(ret, None)
 

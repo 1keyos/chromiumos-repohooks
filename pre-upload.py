@@ -78,6 +78,9 @@ COMMON_EXCLUDED_PATHS = [
     r".*/licenses/.*",
 ]
 
+LICENSE_EXCLUDED_PATHS = [
+    r".*/OWNERS$",
+]
 
 _CONFIG_FILE = 'PRESUBMIT.cfg'
 
@@ -1045,9 +1048,10 @@ def _check_cros_license(_project, commit, options=()):
 
   bad_files = []
   bad_copyright_files = []
-  files = _filter_files(_get_affected_files(commit, relative=True),
-                        included + COMMON_INCLUDED_PATHS,
-                        excluded + COMMON_EXCLUDED_PATHS)
+  files = _filter_files(
+      _get_affected_files(commit, relative=True),
+      included + COMMON_INCLUDED_PATHS,
+      excluded + COMMON_EXCLUDED_PATHS + LICENSE_EXCLUDED_PATHS)
 
   for f in files:
     contents = _get_file_content(f, commit)
@@ -1100,9 +1104,10 @@ def _check_aosp_license(_project, commit, options=()):
 
   included, excluded = _parse_common_inclusion_options(options)
 
-  files = _filter_files(_get_affected_files(commit, relative=True),
-                        included + COMMON_INCLUDED_PATHS,
-                        excluded + COMMON_EXCLUDED_PATHS)
+  files = _filter_files(
+      _get_affected_files(commit, relative=True),
+      included + COMMON_INCLUDED_PATHS,
+      excluded + COMMON_EXCLUDED_PATHS + LICENSE_EXCLUDED_PATHS)
 
   bad_files = []
   for f in files:

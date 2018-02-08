@@ -675,6 +675,12 @@ class CheckCrosLicenseCopyrightHeader(cros_test_lib.MockTestCase):
       self.content_mock.return_value = header
       self.assertNotEqual(None, pre_upload._check_cros_license('proj', 'sha1'))
 
+  def testIgnoreExcludedPaths(self):
+    """Ignores excluded paths for license checks."""
+    self.file_mock.return_value = ['foo/OWNERS']
+    self.content_mock.return_value = ('owner@chromium.org')
+    self.assertEqual(None, pre_upload._check_cros_license('proj', 'sha1'))
+
 
 class CheckAOSPLicenseCopyrightHeader(cros_test_lib.MockTestCase):
   """Tests for _check_aosp_license."""
@@ -746,6 +752,12 @@ class CheckAOSPLicenseCopyrightHeader(cros_test_lib.MockTestCase):
     for header in HEADERS:
       self.content_mock.return_value = header
       self.assertNotEqual(None, pre_upload._check_aosp_license('proj', 'sha1'))
+
+  def testIgnoreExcludedPaths(self):
+    """Ignores excluded paths for license checks."""
+    self.file_mock.return_value = ['foo/OWNERS']
+    self.content_mock.return_value = ('owner@chromium.org')
+    self.assertEqual(None, pre_upload._check_aosp_license('proj', 'sha1'))
 
 
 class CheckLayoutConfTestCase(cros_test_lib.MockTestCase):
